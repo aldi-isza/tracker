@@ -311,31 +311,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                 </CardContent>
             </Card>
 
-            {/* Recent Transactions List (Softened Dark Mode Border, Clean Title & Action Button) */}
-            <Card className="dark:border-zinc-800 dark:bg-[#18181b] dark:shadow-none">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-bold">
-                        Transaksi Terakhir
-                    </CardTitle>
-                    <button
-                        onClick={() => onNavigate(window.VIEWS.TRANSACTIONS)}
-                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                    >
-                        Lihat Semua →
-                    </button>
-                </CardHeader>
-                <CardContent className="p-0 divide-y divide-border/60 dark:divide-zinc-800">
-                    {recentTransactions.length === 0 ? (
-                        <div className="p-6 text-center text-muted-foreground text-xs font-bold">
-                            Belum ada transaksi pada periode ini.
-                        </div>
-                    ) : (
-                        recentTransactions.map(t => (
-                            <TransactionItem key={t.id} transaction={t} compact />
-                        ))
-                    )}
-                </CardContent>
-            </Card>
+
 
             {/* Date Filter Modal (Opens from Dropdown Button) */}
             <Modal
