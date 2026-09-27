@@ -323,6 +323,77 @@ window.api = {
         } catch (err) {
             console.warn('[api.deleteFamilyNote] Notice (deleted locally):', err.message);
         }
+    },
+
+    // Planning (Rencana Anggaran & Transaksi)
+    async getPlanning(userId) {
+        try {
+            const { data, error } = await supabase
+                .from('planning')
+                .select('*')
+                .eq('user_id', userId)
+                .is('is_deleted', false)
+                .order('target_date', { ascending: true });
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.warn('[api.getPlanning] Notice (fallback to local):', err.message);
+            return null;
+        }
+    },
+
+    async addPlanning(userId, planData) {
+        try {
+            const payload = {
+                user_id: userId,
+                title: planData.title,
+                type: planData.type || 'expense',
+                amount: Math.abs(parseFloat(planData.amount) || 0),
+                category_id: planData.category_id || null,
+                target_date: planData.target_date,
+                notes: planData.notes || '',
+                is_realized: false
+            };
+            const { data, error } = await supabase
+                .from('planning')
+                .insert([payload])
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.warn('[api.addPlanning] Notice (saved locally):', err.message);
+            return null;
+        }
+    },
+
+    async updatePlanning(id, planData) {
+        try {
+            const updates = { ...planData, updated_at: new Date().toISOString() };
+            const { data, error } = await supabase
+                .from('planning')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.warn('[api.updatePlanning] Notice (updated locally):', err.message);
+            return null;
+        }
+    },
+
+    async deletePlanning(id) {
+        try {
+            const { error } = await supabase
+                .from('planning')
+                .update({ is_deleted: true })
+                .eq('id', id);
+            if (error) throw error;
+        } catch (err) {
+            console.warn('[api.deletePlanning] Notice (deleted locally):', err.message);
+        }
     }
 };
 
@@ -341,6 +412,9 @@ const App = () => {
     // Family Notes Data (Hook for Catatan Keluarga)
     const familyNotesState = useFamilyNotes(user, window.api, toast);
 
+    // Planning Data (Hook for Rencana & Realisasi)
+    const planningState = usePlanning(user, window.api, toast, () => loadData(false));
+
     // Dashboard Filter & Sort Settings State
     const [dashboardSettings, setDashboardSettings] = useState(() => {
         try {
@@ -350,7 +424,7 @@ const App = () => {
                 if (parsed && parsed.period) return parsed;
             }
         } catch (e) {}
-        return { period: 'this_month', sort: 'highest' };
+        return { period: '1_month', customStartDate: '', customEndDate: '', categoryId: 'all', sort: 'highest' };
     });
 
     const handleUpdateDashboardSettings = useCallback((newSettings) => {
@@ -526,11 +600,54 @@ const App = () => {
                 {/* Scrollable View Content */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 sm:pb-32 md:pb-8">
                     <div className="mx-auto max-w-4xl">
-                        {currentView === window.VIEWS.DASHBOARD && <DashboardView user={user} transactions={transactions} categories={categories} budgetRule={budgetRule} dashboardSettings={dashboardSettings} onNavigate={setCurrentView} onAddClick={openAddTransactionModal} onRefresh={handleManualRefresh} isRefreshing={isRefreshing} />}
-                        {currentView === window.VIEWS.TRANSACTIONS && <TransactionsView user={user} transactions={transactions} categories={categories} onRefresh={loadData} onEdit={openEditTransactionModal} onDelete={setDeleteConfirm} />}
-                        {currentView === window.VIEWS.FAMILY_NOTES && <FamilyNotesView user={user} familyNotesState={familyNotesState} onRefresh={() => familyNotesState.loadNotes(false)} />}
-                        {currentView === window.VIEWS.CATEGORIES && <CategoriesView user={user} categories={categories} onRefresh={loadData} />}
-                        {currentView === window.VIEWS.SETTINGS && <SettingsView user={user} budgetRule={budgetRule} dashboardSettings={dashboardSettings} onUpdateBudgetRule={handleUpdateBudgetRule} onUpdateDashboardSettings={handleUpdateDashboardSettings} onUpdateUser={setUser} onLogout={handleLogout} />}
+                        {currentView === window.VIEWS.DASHBOARD && (
+                            <DashboardView 
+                                user={user} 
+                                transactions={transactions} 
+                                categories={categories} 
+                                dashboardSettings={dashboardSettings} 
+                                familyNotesState={familyNotesState}
+                                planningState={planningState}
+                                onNavigate={setCurrentView} 
+                                onAddClick={openAddTransactionModal} 
+                                onRefresh={handleManualRefresh} 
+                                isRefreshing={isRefreshing} 
+                            />
+                        )}
+                        {currentView === window.VIEWS.TRANSACTIONS && (
+                            <TransactionsView 
+                                user={user} 
+                                transactions={transactions} 
+                                categories={categories} 
+                                onRefresh={loadData} 
+                                onEdit={openEditTransactionModal} 
+                                onDelete={setDeleteConfirm} 
+                            />
+                        )}
+                        {currentView === window.VIEWS.FAMILY_NOTES && (
+                            <FamilyNotesView 
+                                user={user} 
+                                familyNotesState={familyNotesState} 
+                                onRefresh={() => familyNotesState.loadNotes(false)} 
+                            />
+                        )}
+                        {currentView === window.VIEWS.CATEGORIES && (
+                            <CategoriesView 
+                                user={user} 
+                                categories={categories} 
+                                onRefresh={loadData} 
+                            />
+                        )}
+                        {currentView === window.VIEWS.SETTINGS && (
+                            <SettingsView 
+                                user={user} 
+                                categories={categories}
+                                dashboardSettings={dashboardSettings} 
+                                onUpdateDashboardSettings={handleUpdateDashboardSettings} 
+                                onUpdateUser={setUser} 
+                                onLogout={handleLogout} 
+                            />
+                        )}
                     </div>
                 </main>
 
