@@ -333,10 +333,10 @@ window.DashboardView = React.memo(({
                         </span>
                         <button
                             type="button"
-                            onClick={() => onNavigate(window.VIEWS.SETTINGS)}
+                            onClick={() => onNavigate(window.VIEWS.TRANSACTIONS)}
                             className="text-[10px] sm:text-[11px] font-black text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5"
                         >
-                            Filter Setting →
+                            Semua Transaksi →
                         </button>
                     </div>
                 </div>

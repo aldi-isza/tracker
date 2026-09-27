@@ -641,9 +641,6 @@ const App = () => {
                         {currentView === window.VIEWS.SETTINGS && (
                             <SettingsView 
                                 user={user} 
-                                categories={categories}
-                                dashboardSettings={dashboardSettings} 
-                                onUpdateDashboardSettings={handleUpdateDashboardSettings} 
                                 onUpdateUser={setUser} 
                                 onLogout={handleLogout} 
                             />

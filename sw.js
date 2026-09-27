@@ -1,4 +1,4 @@
-const CACHE_NAME = 'isza-family-v13';
+const CACHE_NAME = 'isza-family-v14';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
