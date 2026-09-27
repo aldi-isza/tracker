@@ -4,7 +4,15 @@
 
 const { useState: _svUseState } = React;
 
-window.SettingsView = React.memo(({ user, budgetRule = { needs: 50, wants: 30, savings: 20 }, onUpdateBudgetRule, onUpdateUser, onLogout }) => {
+window.SettingsView = React.memo(({ 
+    user, 
+    budgetRule = { needs: 50, wants: 30, savings: 20 }, 
+    dashboardSettings = { period: 'this_month', sort: 'highest' },
+    onUpdateBudgetRule, 
+    onUpdateDashboardSettings,
+    onUpdateUser, 
+    onLogout 
+}) => {
     const [newPin, setNewPin] = _svUseState('');
     const [currentTheme, setCurrentTheme] = _svUseState(user.theme || 'light');
 
@@ -12,6 +20,10 @@ window.SettingsView = React.memo(({ user, budgetRule = { needs: 50, wants: 30, s
     const [ruleNeeds, setRuleNeeds] = _svUseState(budgetRule.needs);
     const [ruleWants, setRuleWants] = _svUseState(budgetRule.wants);
     const [ruleSavings, setRuleSavings] = _svUseState(budgetRule.savings);
+
+    // Filter & Sort Settings State
+    const [selectedPeriod, setSelectedPeriod] = _svUseState(dashboardSettings?.period || 'this_month');
+    const [selectedSort, setSelectedSort] = _svUseState(dashboardSettings?.sort || 'highest');
 
     const toast = window.useToast();
 
@@ -38,6 +50,17 @@ window.SettingsView = React.memo(({ user, budgetRule = { needs: 50, wants: 30, s
         setRuleNeeds(n);
         setRuleWants(w);
         setRuleSavings(s);
+    };
+
+    const handleSaveDashboardSettings = (newPeriod, newSort) => {
+        const period = newPeriod !== undefined ? newPeriod : selectedPeriod;
+        const sort = newSort !== undefined ? newSort : selectedSort;
+        setSelectedPeriod(period);
+        setSelectedSort(sort);
+        if (onUpdateDashboardSettings) {
+            onUpdateDashboardSettings({ period, sort });
+        }
+        toast("Pengaturan filter & tampilan dashboard diperbarui!", "success");
     };
 
     const handleChangePin = async () => {
@@ -77,8 +100,23 @@ window.SettingsView = React.memo(({ user, budgetRule = { needs: 50, wants: 30, s
         { label: '40/30/30 (Saver)', n: 40, w: 30, s: 30 },
     ];
 
+    const PERIOD_OPTIONS = [
+        { id: 'this_month', label: 'Bulan Ini', desc: 'Siklus bulan berjalan (Rekomendasi)' },
+        { id: '30days', label: '30 Hari Terakhir', desc: 'Rentang 30 hari ke belakang' },
+        { id: '7days', label: '7 Hari Terakhir', desc: 'Pantau belanja sepekan ini' },
+        { id: 'today', label: 'Hari Ini', desc: 'Fokus transaksi harian' },
+        { id: 'last_month', label: 'Bulan Lalu', desc: 'Evaluasi bulan sebelumnya' },
+        { id: 'all', label: 'Semua Waktu', desc: 'Akumulasi total keseluruhan' }
+    ];
+
+    const SORT_OPTIONS = [
+        { id: 'highest', label: '💰 Pengeluaran Terbesar' },
+        { id: 'lowest', label: '📉 Pengeluaran Terkecil' },
+        { id: 'name', label: '🔤 Nama Kategori (A-Z)' }
+    ];
+
     return (
-        <div className="space-y-3.5 max-w-xl mx-auto">
+        <div className="space-y-3.5 max-w-xl mx-auto pb-12">
             {/* User Profile Card */}
             <Card className="p-4">
                 <div className="flex items-center gap-3.5">
@@ -92,6 +130,77 @@ window.SettingsView = React.memo(({ user, budgetRule = { needs: 50, wants: 30, s
                         </p>
                     </div>
                 </div>
+            </Card>
+
+            {/* Dashboard Filter & Sort Settings Card */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        <span className="flex items-center gap-1.5"><Icon name="filter" size={14} /> Filter & Sort Dashboard</span>
+                        <span className="text-[10px] font-black text-black px-2 py-0.5 rounded-md bg-indigo-500 border border-black dark:border-white">
+                            Aktif
+                        </span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-[11px] font-bold text-muted-foreground leading-relaxed">
+                        Atur periode waktu dan urutan data default untuk tampilan Dashboard tanpa popup yang mengganggu.
+                    </p>
+
+                    {/* Periode Default */}
+                    <div className="space-y-1.5">
+                        <Label>Periode Waktu Dashboard</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {PERIOD_OPTIONS.map(opt => {
+                                const isSelected = selectedPeriod === opt.id;
+                                return (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => handleSaveDashboardSettings(opt.id, selectedSort)}
+                                        className={`p-2.5 rounded-xl border-2 text-left transition-all active:scale-95 ${
+                                            isSelected
+                                                ? `bg-indigo-500 text-black border-black dark:border-white ${NB.shadow.sm}`
+                                                : `bg-card text-foreground border-black dark:border-zinc-800 hover:bg-muted`
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-black">{opt.label}</span>
+                                            {isSelected && <Icon name="check" size={14} />}
+                                        </div>
+                                        <p className={`text-[10px] font-semibold mt-0.5 line-clamp-1 ${isSelected ? 'text-black/80' : 'text-muted-foreground'}`}>
+                                            {opt.desc}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Urutan Kategori */}
+                    <div className="space-y-1.5 pt-2 border-t border-border">
+                        <Label>Urutan Kategori Pengeluaran</Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {SORT_OPTIONS.map(opt => {
+                                const isSelected = selectedSort === opt.id;
+                                return (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => handleSaveDashboardSettings(selectedPeriod, opt.id)}
+                                        className={`p-2 rounded-lg border-2 text-xs font-black text-center transition-all active:scale-95 ${
+                                            isSelected
+                                                ? `bg-indigo-500 text-black border-black dark:border-white ${NB.shadow.sm}`
+                                                : `bg-card text-foreground border-black dark:border-zinc-800 hover:bg-muted`
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </CardContent>
             </Card>
 
             {/* Budget Allocation Card */}

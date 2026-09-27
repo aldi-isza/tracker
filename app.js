@@ -20,6 +20,7 @@ const CONFIG = window.CONFIG || {
 window.VIEWS = {
     DASHBOARD: 'dashboard',
     TRANSACTIONS: 'transactions',
+    FAMILY_NOTES: 'family_notes',
     CATEGORIES: 'categories',
     SETTINGS: 'settings',
 };
@@ -28,6 +29,8 @@ window.STORAGE_KEYS = {
     USER: 'ff_user',
     SESSION: 'ff_session',
     BUDGET_RULE: 'ff_budget_rule',
+    DASHBOARD_SETTINGS: 'ff_dashboard_settings',
+    FAMILY_NOTES: 'isza_family_notes_cache',
 };
 
 // ============================================
@@ -241,6 +244,85 @@ window.api = {
             .update(updates)
             .eq('id', userId);
         if (error) throw error;
+    },
+
+    // Catatan Keluarga (Family Notes & Logbook)
+    async getFamilyNotes(userId) {
+        try {
+            const { data, error } = await supabase
+                .from('family_notes')
+                .select('*')
+                .eq('user_id', userId)
+                .is('is_deleted', false)
+                .order('last_date', { ascending: false });
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.warn('[api.getFamilyNotes] Notice (using local cache):', err.message);
+            return null;
+        }
+    },
+
+    async addFamilyNote(userId, noteData) {
+        try {
+            const payload = {
+                user_id: userId,
+                title: noteData.title,
+                category: noteData.category,
+                last_date: noteData.last_date,
+                next_due_date: noteData.next_due_date || null,
+                cost: noteData.cost || 0,
+                status: noteData.status || 'Selesai',
+                notes: noteData.notes || ''
+            };
+            const { data, error } = await supabase
+                .from('family_notes')
+                .insert([payload])
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.warn('[api.addFamilyNote] Notice (saved locally):', err.message);
+            return null;
+        }
+    },
+
+    async updateFamilyNote(id, noteData) {
+        try {
+            const { data, error } = await supabase
+                .from('family_notes')
+                .update({
+                    title: noteData.title,
+                    category: noteData.category,
+                    last_date: noteData.last_date,
+                    next_due_date: noteData.next_due_date || null,
+                    cost: noteData.cost || 0,
+                    status: noteData.status || 'Selesai',
+                    notes: noteData.notes || '',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.warn('[api.updateFamilyNote] Notice (updated locally):', err.message);
+            return null;
+        }
+    },
+
+    async deleteFamilyNote(id) {
+        try {
+            const { error } = await supabase
+                .from('family_notes')
+                .update({ is_deleted: true })
+                .eq('id', id);
+            if (error) throw error;
+        } catch (err) {
+            console.warn('[api.deleteFamilyNote] Notice (deleted locally):', err.message);
+        }
     }
 };
 
@@ -255,6 +337,26 @@ const App = () => {
     // Finance Data (extracted to hook)
     const toast = window.useToast();
     const { transactions, categories, isRefreshing, loadData, handleManualRefresh } = useFinanceData(user, window.api, toast);
+
+    // Family Notes Data (Hook for Catatan Keluarga)
+    const familyNotesState = useFamilyNotes(user, window.api, toast);
+
+    // Dashboard Filter & Sort Settings State
+    const [dashboardSettings, setDashboardSettings] = useState(() => {
+        try {
+            const saved = localStorage.getItem(window.STORAGE_KEYS.DASHBOARD_SETTINGS);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.period) return parsed;
+            }
+        } catch (e) {}
+        return { period: 'this_month', sort: 'highest' };
+    });
+
+    const handleUpdateDashboardSettings = useCallback((newSettings) => {
+        setDashboardSettings(newSettings);
+        localStorage.setItem(window.STORAGE_KEYS.DASHBOARD_SETTINGS, JSON.stringify(newSettings));
+    }, []);
 
     // Budget Rule State
     const [budgetRule, setBudgetRule] = useState(() => {
@@ -356,6 +458,7 @@ const App = () => {
     const navItems = [
         { id: window.VIEWS.DASHBOARD, label: 'Dashboard', icon: 'home' },
         { id: window.VIEWS.TRANSACTIONS, label: 'Transaksi', icon: 'list' },
+        { id: window.VIEWS.FAMILY_NOTES, label: 'Catatan', icon: 'fileText' },
         { id: window.VIEWS.CATEGORIES, label: 'Kategori', icon: 'folder' },
         { id: window.VIEWS.SETTINGS, label: 'Pengaturan', icon: 'settings' },
     ];
@@ -423,10 +526,11 @@ const App = () => {
                 {/* Scrollable View Content */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 sm:pb-32 md:pb-8">
                     <div className="mx-auto max-w-4xl">
-                        {currentView === window.VIEWS.DASHBOARD && <DashboardView user={user} transactions={transactions} categories={categories} budgetRule={budgetRule} onNavigate={setCurrentView} onAddClick={openAddTransactionModal} onRefresh={handleManualRefresh} isRefreshing={isRefreshing} />}
+                        {currentView === window.VIEWS.DASHBOARD && <DashboardView user={user} transactions={transactions} categories={categories} budgetRule={budgetRule} dashboardSettings={dashboardSettings} onNavigate={setCurrentView} onAddClick={openAddTransactionModal} onRefresh={handleManualRefresh} isRefreshing={isRefreshing} />}
                         {currentView === window.VIEWS.TRANSACTIONS && <TransactionsView user={user} transactions={transactions} categories={categories} onRefresh={loadData} onEdit={openEditTransactionModal} onDelete={setDeleteConfirm} />}
+                        {currentView === window.VIEWS.FAMILY_NOTES && <FamilyNotesView user={user} familyNotesState={familyNotesState} onRefresh={() => familyNotesState.loadNotes(false)} />}
                         {currentView === window.VIEWS.CATEGORIES && <CategoriesView user={user} categories={categories} onRefresh={loadData} />}
-                        {currentView === window.VIEWS.SETTINGS && <SettingsView user={user} budgetRule={budgetRule} onUpdateBudgetRule={handleUpdateBudgetRule} onUpdateUser={setUser} onLogout={handleLogout} />}
+                        {currentView === window.VIEWS.SETTINGS && <SettingsView user={user} budgetRule={budgetRule} dashboardSettings={dashboardSettings} onUpdateBudgetRule={handleUpdateBudgetRule} onUpdateDashboardSettings={handleUpdateDashboardSettings} onUpdateUser={setUser} onLogout={handleLogout} />}
                     </div>
                 </main>
 

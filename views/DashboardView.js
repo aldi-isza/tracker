@@ -1,16 +1,21 @@
 // ============================================
-// DASHBOARD VIEW
+// DASHBOARD VIEW — Clean & Streamlined
 // ============================================
 
 const { useState: _dvUseState, useMemo: _dvUseMemo, useRef: _dvUseRef, useCallback: _dvUseCallback } = React;
 
-window.DashboardView = React.memo(({ user, transactions, categories, budgetRule = { needs: 50, wants: 30, savings: 20 }, onNavigate, onAddClick, onRefresh, isRefreshing }) => {
-    // Filter Presets: 'this_month' (default), 'today', '7days', '30days', 'last_month', 'custom', 'all'
-    const [filterPreset, setFilterPreset] = _dvUseState('this_month');
-    const [customStart, setCustomStart] = _dvUseState('');
-    const [customEnd, setCustomEnd] = _dvUseState('');
+window.DashboardView = React.memo(({ 
+    user, 
+    transactions, 
+    categories, 
+    budgetRule = { needs: 50, wants: 30, savings: 20 },
+    dashboardSettings = { period: 'this_month', sort: 'highest' },
+    onNavigate, 
+    onAddClick, 
+    onRefresh, 
+    isRefreshing 
+}) => {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = _dvUseState(false);
-    const [isFilterModalOpen, setIsFilterModalOpen] = _dvUseState(false);
 
     // Helpers to format YYYY-MM-DD
     const formatDateObj = (d) => {
@@ -20,35 +25,32 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
         return `${y}-${m}-${day}`;
     };
 
-    // Derived Date Range & Period Label
-    const { filteredDashboardTransactions, periodLabel, buttonLabel } = _dvUseMemo(() => {
+    // Derived Date Range & Period Label based on dashboardSettings.period
+    const { filteredDashboardTransactions, periodLabel } = _dvUseMemo(() => {
         const today = new Date();
         let start = null;
         let end = null;
         let label = 'Bulan Ini';
-        let btn = 'Bulan Ini';
+        const preset = dashboardSettings?.period || 'this_month';
 
-        if (filterPreset === 'today') {
+        if (preset === 'today') {
             const todayStr = formatDateObj(today);
             start = todayStr;
             end = todayStr;
             label = `Hari Ini (${formatDate(todayStr)})`;
-            btn = 'Hari Ini';
-        } else if (filterPreset === '7days') {
+        } else if (preset === '7days') {
             const past = new Date(today);
             past.setDate(past.getDate() - 6);
             start = formatDateObj(past);
             end = formatDateObj(today);
             label = '7 Hari Terakhir';
-            btn = '7 Hari';
-        } else if (filterPreset === '30days') {
+        } else if (preset === '30days') {
             const past = new Date(today);
             past.setDate(past.getDate() - 29);
             start = formatDateObj(past);
             end = formatDateObj(today);
             label = '30 Hari Terakhir';
-            btn = '30 Hari';
-        } else if (filterPreset === 'this_month') {
+        } else if (preset === 'this_month') {
             const y = today.getFullYear();
             const m = today.getMonth();
             const first = new Date(y, m, 1);
@@ -56,8 +58,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
             start = formatDateObj(first);
             end = formatDateObj(last);
             label = `Bulan Ini (${today.toLocaleString('id-ID', { month: 'short', year: 'numeric' })})`;
-            btn = `Bulan Ini (${today.toLocaleString('id-ID', { month: 'short' })})`;
-        } else if (filterPreset === 'last_month') {
+        } else if (preset === 'last_month') {
             const y = today.getFullYear();
             const m = today.getMonth() - 1;
             const first = new Date(y, m, 1);
@@ -65,33 +66,10 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
             start = formatDateObj(first);
             end = formatDateObj(last);
             label = `Bulan Lalu (${first.toLocaleString('id-ID', { month: 'short', year: 'numeric' })})`;
-            btn = `Bulan Lalu (${first.toLocaleString('id-ID', { month: 'short' })})`;
-        } else if (filterPreset === 'custom') {
-            start = customStart || null;
-            end = customEnd || null;
-            if (start && end) {
-                if (start === end) {
-                    label = formatDate(start);
-                    btn = formatDate(start);
-                } else {
-                    label = `${formatDate(start)} – ${formatDate(end)}`;
-                    btn = `${formatDate(start).split(' ')[0]} - ${formatDate(end).split(' ')[0]}`;
-                }
-            } else if (start) {
-                label = `Mulai ${formatDate(start)}`;
-                btn = `≥ ${formatDate(start).split(' ')[0]}`;
-            } else if (end) {
-                label = `Hingga ${formatDate(end)}`;
-                btn = `≤ ${formatDate(end).split(' ')[0]}`;
-            } else {
-                label = 'Pilih Tanggal';
-                btn = 'Pilih Tanggal';
-            }
-        } else if (filterPreset === 'all') {
+        } else if (preset === 'all') {
             start = null;
             end = null;
             label = 'Semua Periode';
-            btn = 'Semua';
         }
 
         const filtered = (transactions || []).filter(t => {
@@ -102,8 +80,8 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
             return true;
         });
 
-        return { filteredDashboardTransactions: filtered, periodLabel: label, buttonLabel: btn };
-    }, [transactions, filterPreset, customStart, customEnd]);
+        return { filteredDashboardTransactions: filtered, periodLabel: label };
+    }, [transactions, dashboardSettings]);
 
     const { income: totalIncome, expense: totalExpense } = calcTotals(filteredDashboardTransactions);
     const balance = calcBalance(transactions);
@@ -118,32 +96,34 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
 
     // Harmonized premium pastel & jewel tones for pie chart and categories
     const PREMIUM_PIE_PALETTE = [
-        '#38bdf8', // Sky Blue
-        '#a78bfa', // Soft Purple
-        '#2dd4bf', // Teal
-        '#fb7185', // Rose
-        '#fbbf24', // Warm Amber
-        '#818cf8', // Indigo
-        '#34d399', // Emerald
-        '#f472b6', // Peach Pink
-        '#94a3b8'  // Slate / Others
+        '#38bdf8', '#a78bfa', '#2dd4bf', '#fb7185', 
+        '#fbbf24', '#818cf8', '#34d399', '#f472b6', '#94a3b8'
     ];
 
     const sortedCategories = _dvUseMemo(() => {
-        return Object.keys(categoryBreakdown)
-            .map(catName => ({
-                name: catName,
-                amount: categoryBreakdown[catName].amount
-            }))
-            .sort((a, b) => b.amount - a.amount)
-            .map((item, idx) => ({
-                ...item,
-                color: PREMIUM_PIE_PALETTE[idx % PREMIUM_PIE_PALETTE.length]
-            }));
-    }, [categoryBreakdown]);
+        const rawList = Object.keys(categoryBreakdown).map(catName => ({
+            name: catName,
+            amount: categoryBreakdown[catName].amount
+        }));
 
-    // ---- Chart Data ----
-    const pieData = {
+        const sortMode = dashboardSettings?.sort || 'highest';
+        let sorted = rawList;
+        if (sortMode === 'lowest') {
+            sorted = rawList.sort((a, b) => a.amount - b.amount);
+        } else if (sortMode === 'name') {
+            sorted = rawList.sort((a, b) => a.name.localeCompare(b.name));
+        } else {
+            sorted = rawList.sort((a, b) => b.amount - a.amount);
+        }
+
+        return sorted.map((item, idx) => ({
+            ...item,
+            color: PREMIUM_PIE_PALETTE[idx % PREMIUM_PIE_PALETTE.length]
+        }));
+    }, [categoryBreakdown, dashboardSettings]);
+
+    // Chart Data
+    const pieData = _dvUseMemo(() => ({
         labels: hasExpenses
             ? sortedCategories.map(c => {
                 const pct = totalExpense > 0 ? Math.round((c.amount / totalExpense) * 100) : 0;
@@ -157,63 +137,56 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
             borderWidth: 2,
             hoverOffset: 4
         }]
-    };
+    }), [hasExpenses, sortedCategories, totalExpense]);
 
-    const pieOptions = {
+    const pieOptions = _dvUseMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: {
-            legend: {
-                display: false
-            }
+            legend: { display: false }
         }
-    };
+    }), []);
 
-    const presets = [
-        { id: 'today', label: 'Hari Ini' },
-        { id: '7days', label: '7 Hari Terakhir' },
-        { id: '30days', label: '30 Hari Terakhir' },
-        { id: 'this_month', label: 'Bulan Ini' },
-        { id: 'last_month', label: 'Bulan Lalu' },
-        { id: 'all', label: 'Semua Periode' }
-    ];
-
-    const recentTransactions = filteredDashboardTransactions.slice(0, 5);
-
-    const rawName = user?.email ? user.email.split('@')[0] : 'User';
+    const rawName = user?.email ? user.email.split('@')[0] : 'Keluarga';
     const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
     return (
-        <div className="space-y-4 pb-28 sm:pb-20">
-            {/* Welcome Header & Global Time Filter */}
-            <div className="flex items-center justify-between px-1 gap-2">
+        <div className="space-y-4 max-w-4xl mx-auto pb-12">
+            {/* Clean Welcome Header */}
+            <div className="flex items-center justify-between px-1 gap-2 pt-1">
                 <div>
-                    <p className="text-xs font-medium text-muted-foreground">Selamat datang,</p>
-                    <h2 className="text-base sm:text-lg font-black text-foreground truncate max-w-[150px] sm:max-w-xs">{displayName}</h2>
+                    <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight flex items-center gap-1.5">
+                        Halo, {displayName}! 👋
+                    </h2>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-muted-foreground bg-muted/60 dark:bg-zinc-900/80 px-2.5 py-0.5 rounded-md border border-border/60">
+                            <Icon name="calendar" size={12} className="text-indigo-500" />
+                            {periodLabel}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onNavigate(window.VIEWS.SETTINGS)}
+                            className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                            title="Buka pengaturan untuk mengganti filter default"
+                        >
+                            <span>Ubah Filter</span>
+                            <Icon name="chevronRight" size={12} />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    {/* Global Date Filter Dropdown Trigger Button */}
-                    <button
-                        type="button"
-                        onClick={() => setIsFilterModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card dark:bg-[#18181b] hover:bg-muted/80 text-foreground border-2 border-black dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none text-xs font-black transition-all active:scale-95 cursor-pointer"
-                        title="Filter Periode Tanggal"
-                        aria-label="Filter Periode Tanggal"
-                    >
-                        <Icon name="calendar" size={13} className="text-indigo-500 shrink-0" />
-                        <span className="truncate max-w-[130px] sm:max-w-none">{buttonLabel}</span>
-                        <Icon name="chevronDown" size={12} className="opacity-70 shrink-0" />
-                    </button>
 
-                    {/* Refresh Button */}
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Clean Refresh Button */}
                     <button
                         type="button"
                         onClick={onRefresh}
                         disabled={isRefreshing}
-                        className={`p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-card dark:bg-[#18181b] hover:bg-muted/80 text-foreground border-2 border-black dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none text-xs font-black transition-all active:scale-95 cursor-pointer disabled:pointer-events-none ${isRefreshing ? 'opacity-70' : ''}`}
+                        className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-card dark:bg-[#18181b] hover:bg-muted text-foreground border-2 border-black dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none text-xs font-black transition-all active:scale-95 cursor-pointer disabled:pointer-events-none ${isRefreshing ? 'opacity-70' : ''}`}
                         title="Refresh Data"
                         aria-label="Refresh Data"
                     >
                         <Icon name="refresh" size={13} className={isRefreshing ? 'animate-spin text-indigo-500' : ''} />
-                        <span className="text-[11px] font-extrabold hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
+                        <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
                     </button>
                 </div>
             </div>
@@ -221,7 +194,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
             {/* Financial Hero Balance Card */}
             <div className="rounded-2xl bg-slate-900 text-white p-5 sm:p-6 shadow-md border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                    <span className="text-slate-300 font-bold uppercase tracking-wider text-[11px]">Total Balance</span>
+                    <span className="text-slate-300 font-bold uppercase tracking-wider text-[11px]">Total Saldo Kas</span>
                 </div>
                 <div>
                     <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
@@ -238,7 +211,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                         <span>Financial Insights</span>
                     </button>
                     <div className="text-right shrink-0">
-                        <span className="block text-[10px] text-slate-400 font-bold tracking-wider">Today's Spend</span>
+                        <span className="block text-[10px] text-slate-400 font-bold tracking-wider">Pengeluaran Hari Ini</span>
                         <span className="text-xs sm:text-sm font-extrabold text-rose-400">
                             {formatCurrency(todayExpense)}
                         </span>
@@ -246,14 +219,14 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                 </div>
             </div>
 
-            {/* Side-by-Side Summary Cards (Softened Dark Mode Borders) */}
+            {/* Side-by-Side Summary Cards */}
             <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl space-y-1.5 border-2 border-black dark:border-zinc-800 bg-card dark:bg-[#18181b] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-none transition-all">
                     <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                         <div className="p-1.5 bg-emerald-500/10 rounded-lg">
                             <Icon name="arrowDownLeft" size={16} />
                         </div>
-                        <span className="text-xs font-black tracking-tight uppercase">Income</span>
+                        <span className="text-xs font-black tracking-tight uppercase">Pemasukan</span>
                     </div>
                     <p className="text-base sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 truncate pt-0.5">
                         {formatCurrency(totalIncome)}
@@ -265,7 +238,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                         <div className="p-1.5 bg-rose-500/10 rounded-lg">
                             <Icon name="arrowUpRight" size={16} />
                         </div>
-                        <span className="text-xs font-black tracking-tight uppercase">Expenses</span>
+                        <span className="text-xs font-black tracking-tight uppercase">Pengeluaran</span>
                     </div>
                     <p className="text-base sm:text-xl font-extrabold text-rose-600 dark:text-rose-400 truncate pt-0.5">
                         {formatCurrency(totalExpense)}
@@ -273,7 +246,7 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                 </div>
             </div>
 
-            {/* Pie Chart Card (Softened Dark Mode Border & Clean Title) */}
+            {/* Pie Chart Card */}
             <Card className="dark:border-zinc-800 dark:bg-[#18181b] dark:shadow-none">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
@@ -310,113 +283,6 @@ window.DashboardView = React.memo(({ user, transactions, categories, budgetRule 
                     </div>
                 </CardContent>
             </Card>
-
-
-
-            {/* Date Filter Modal (Opens from Dropdown Button) */}
-            <Modal
-                isOpen={isFilterModalOpen}
-                onClose={() => setIsFilterModalOpen(false)}
-                title="Pilih Periode Waktu"
-            >
-                <div className="space-y-4">
-                    {/* Quick Presets */}
-                    <div className="space-y-1.5">
-                        <Label className="text-[10px]">Pilihan Cepat</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {presets.map(p => {
-                                const isActive = filterPreset === p.id;
-                                return (
-                                    <button
-                                        key={p.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setFilterPreset(p.id);
-                                            setIsFilterModalOpen(false);
-                                        }}
-                                        className={`p-3 rounded-xl border-2 text-xs font-bold flex items-center justify-between transition-all active:scale-95 ${
-                                            isActive
-                                                ? `bg-indigo-500 text-black border-black ${NB.shadow.sm}`
-                                                : `bg-card text-foreground border-black dark:border-zinc-800 hover:bg-muted`
-                                        }`}
-                                    >
-                                        <span>{p.label}</span>
-                                        {isActive && <Icon name="check" size={14} />}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Custom Date Range Section */}
-                    <div className="pt-3 border-t border-border/80 dark:border-zinc-800 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-[10px]">Rentang Tanggal Kustom</Label>
-                            {customStart && customEnd && (
-                                <button
-                                    type="button"
-                                    onClick={() => setCustomEnd(customStart)}
-                                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
-                                >
-                                    Pilih 1 Hari Saja
-                                </button>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-muted-foreground font-semibold">Dari</span>
-                                <Input
-                                    type="date"
-                                    value={customStart}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setCustomStart(val);
-                                        if (!customEnd) setCustomEnd(val);
-                                    }}
-                                    className="h-10 text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-muted-foreground font-semibold">Sampai</span>
-                                <Input
-                                    type="date"
-                                    value={customEnd}
-                                    onChange={(e) => setCustomEnd(e.target.value)}
-                                    className="h-10 text-xs"
-                                />
-                            </div>
-                        </div>
-
-                        <Button
-                            onClick={() => {
-                                setFilterPreset('custom');
-                                setIsFilterModalOpen(false);
-                            }}
-                            className="w-full font-black text-xs h-10 mt-1"
-                        >
-                            Terapkan Rentang Tanggal
-                        </Button>
-                    </div>
-
-                    {/* Reset to Default */}
-                    {filterPreset !== 'this_month' && (
-                        <div className="pt-1 text-center">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setFilterPreset('this_month');
-                                    setCustomStart('');
-                                    setCustomEnd('');
-                                    setIsFilterModalOpen(false);
-                                }}
-                                className="text-xs text-rose-600 dark:text-rose-400 hover:underline font-bold"
-                            >
-                                Reset ke Bulan Ini
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </Modal>
 
             {/* Financial Insights Modal */}
             <Modal
