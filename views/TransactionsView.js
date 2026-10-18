@@ -4,9 +4,9 @@
 
 const { useState: _tvUseState, useMemo: _tvUseMemo } = React;
 
-window.TransactionsView = React.memo(({ user, transactions, categories, onRefresh, onEdit, onDelete }) => {
+window.TransactionsView = React.memo(({ user, transactions = [], categories = [], isLoading = false, onRefresh, onEdit, onDelete }) => {
     // Filter States
-    const [period, setPeriod] = _tvUseState('1_month'); // '1_month', 'custom', '7days', 'today', 'all'
+    const [period, setPeriod] = _tvUseState('all'); // 'all' or 'custom'
     const [customStartDate, setCustomStartDate] = _tvUseState('');
     const [customEndDate, setCustomEndDate] = _tvUseState('');
     const [type, setType] = _tvUseState('');
@@ -17,7 +17,7 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
     const [showFilterDrawer, setShowFilterDrawer] = _tvUseState(false);
 
     const toast = window.useToast();
-    const ITEMS_PER_PAGE = 10;
+    const [itemsPerPage, setItemsPerPage] = _tvUseState(10);
 
     // Filter Logic
     const filtered = _tvUseMemo(() => {
@@ -95,12 +95,12 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
         setCurrentPage(1);
     }, [period, customStartDate, customEndDate, type, categoryId, searchQuery]);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
     const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-    const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filtered.length);
-    const paginated = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
+    const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
 
     const getPageNumbers = () => {
         if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -416,9 +416,26 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
 
     const paginationBar = filtered.length > 0 ? (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 px-0.5">
-            <span className="text-xs font-bold text-muted-foreground order-2 sm:order-1">
-                Menampilkan <span className="text-foreground font-black">{startIndex + 1}–{endIndex}</span> dari <span className="text-foreground font-black">{filtered.length}</span> transaksi
-            </span>
+            <div className="flex items-center gap-2 order-2 sm:order-1 flex-wrap">
+                <span className="text-xs font-bold text-muted-foreground">
+                    Showing <span className="text-foreground font-black">{startIndex + 1}–{endIndex}</span> of <span className="text-foreground font-black">{filtered.length}</span> transactions
+                </span>
+                <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-800">
+                    <select
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value));
+                            setCurrentPage(1);
+                        }}
+                        className="h-7 px-2 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        aria-label="Transactions per page"
+                    >
+                        <option value="10">10 / page</option>
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                    </select>
+                </div>
+            </div>
 
             {totalPages > 1 && (
                 <div className="flex items-center gap-1.5 order-1 sm:order-2 flex-wrap justify-center">
@@ -426,20 +443,20 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                         type="button"
                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                         disabled={safeCurrentPage === 1}
-                        className={`h-9 px-3 rounded-lg border-2 border-black dark:border-zinc-800 font-black text-xs flex items-center gap-1 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none ${
-                            safeCurrentPage === 1 ? 'bg-muted text-muted-foreground' : `bg-card hover:bg-muted text-foreground ${NB.shadow.sm} dark:shadow-none`
+                        className={`h-9 px-3 rounded-xl border border-slate-200/80 dark:border-slate-800 font-medium text-xs flex items-center gap-1 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none ${
+                            safeCurrentPage === 1 ? 'bg-slate-50 dark:bg-slate-900 text-slate-400' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-xs'
                         }`}
-                        aria-label="Halaman Sebelumnya"
+                        aria-label="Previous Page"
                     >
-                        <Icon name="chevronLeft" size={15} />
-                        <span className="hidden sm:inline">Sebelumnya</span>
+                        <Icon name="arrowLeft" size={15} />
+                        <span className="hidden sm:inline">Previous</span>
                     </button>
 
                     <div className="flex items-center gap-1">
                         {getPageNumbers().map((p, idx) => {
                             if (p === '...') {
                                 return (
-                                    <span key={`dots-${idx}`} className="px-1.5 text-xs font-black text-muted-foreground">
+                                    <span key={`dots-${idx}`} className="px-1.5 text-xs font-medium text-slate-400">
                                         ...
                                     </span>
                                 );
@@ -450,12 +467,12 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                                     key={p}
                                     type="button"
                                     onClick={() => setCurrentPage(p)}
-                                    className={`min-w-[34px] h-9 px-2 rounded-lg border-2 border-black dark:border-zinc-800 text-xs font-black transition-all active:scale-95 ${
+                                    className={`min-w-[34px] h-9 px-2 rounded-xl text-xs font-medium transition-all active:scale-95 ${
                                         isActive
-                                            ? `bg-indigo-500 text-black ${NB.shadow.sm} dark:shadow-none`
-                                            : `bg-card hover:bg-muted text-foreground ${NB.shadow.sm} dark:shadow-none`
+                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-800 shadow-xs'
                                     }`}
-                                    aria-label={`Halaman ${p}`}
+                                    aria-label={`Page ${p}`}
                                     aria-current={isActive ? 'page' : undefined}
                                 >
                                     {p}
@@ -468,13 +485,13 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                         type="button"
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                         disabled={safeCurrentPage === totalPages}
-                        className={`h-9 px-3 rounded-lg border-2 border-black dark:border-zinc-800 font-black text-xs flex items-center gap-1 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none ${
-                            safeCurrentPage === totalPages ? 'bg-muted text-muted-foreground' : `bg-card hover:bg-muted text-foreground ${NB.shadow.sm} dark:shadow-none`
+                        className={`h-9 px-3 rounded-xl border border-slate-200/80 dark:border-slate-800 font-medium text-xs flex items-center gap-1 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none ${
+                            safeCurrentPage === totalPages ? 'bg-slate-50 dark:bg-slate-900 text-slate-400' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-xs'
                         }`}
-                        aria-label="Halaman Selanjutnya"
+                        aria-label="Next Page"
                     >
-                        <span className="hidden sm:inline">Selanjutnya</span>
-                        <Icon name="chevronRight" size={15} />
+                        <span className="hidden sm:inline">Next</span>
+                        <Icon name="arrowRight" size={15} />
                     </button>
                 </div>
             )}
@@ -495,8 +512,8 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Cari transaksi, nominal, catatan..."
-                            className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-card text-foreground border-2 border-black dark:border-white rounded-xl shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2.5px_2.5px_0px_0px_rgba(255,255,255,1)] focus:outline-none font-bold placeholder:text-muted-foreground"
+                            placeholder="Search..."
+                            className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs focus:outline-none font-medium placeholder:text-slate-400"
                         />
                         {searchQuery && (
                             <button
@@ -513,16 +530,16 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                     <button
                         type="button"
                         onClick={() => setShowFilterDrawer(!showFilterDrawer)}
-                        className={`h-10 px-3 rounded-xl border-2 border-black dark:border-white font-black text-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0 ${
+                        className={`h-10 px-3 rounded-xl border border-slate-200/80 dark:border-slate-800 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0 ${
                             hasActiveFilter
-                                ? 'bg-indigo-500 text-black shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2.5px_2.5px_0px_0px_rgba(255,255,255,1)]'
-                                : 'bg-card text-foreground hover:bg-muted shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2.5px_2.5px_0px_0px_rgba(255,255,255,1)]'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs'
                         }`}
                     >
                         <Icon name="filter" size={14} />
                         <span className="hidden sm:inline">Filter</span>
                         {hasActiveFilter && (
-                            <span className="w-2 h-2 rounded-full bg-rose-500 border border-black"></span>
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                         )}
                     </button>
 
@@ -530,42 +547,39 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                     <button
                         type="button"
                         onClick={handleDownloadPDF}
-                        className="h-10 px-3.5 rounded-xl border-2 border-black dark:border-white font-black text-xs bg-emerald-400 hover:bg-emerald-500 text-black shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2.5px_2.5px_0px_0px_rgba(255,255,255,1)] flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
-                        title="Download Laporan PDF"
+                        className="h-10 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+                        title="Download PDF"
                     >
                         <Icon name="download" size={15} />
-                        <span className="hidden sm:inline">Download PDF</span>
+                        <span className="hidden sm:inline">PDF</span>
                     </button>
                 </div>
 
                 {/* Filter Controls Panel (Collapsible / Dynamic) */}
                 {showFilterDrawer && (
-                    <Card className="p-3.5 sm:p-4 bg-muted/40 border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] space-y-3">
-                        <div className="flex items-center justify-between border-b border-border/80 pb-2">
-                            <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-foreground">
-                                <Icon name="filter" size={13} /> Filter & Rentang Tanggal
+                    <Card className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <span className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                <Icon name="filter" size={13} /> Filter
                             </span>
                             {hasActiveFilter && (
                                 <button
                                     type="button"
                                     onClick={resetFilters}
-                                    className="text-[11px] font-black text-rose-500 hover:underline"
+                                    className="text-[11px] font-medium text-rose-500 hover:underline"
                                 >
-                                    Reset Semua
+                                    Reset
                                 </button>
                             )}
                         </div>
 
-                        {/* Rentang Waktu Preset */}
+                        {/* Rentang Waktu Custom */}
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black">Rentang Waktu</Label>
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                            <Label className="text-[10px] font-medium text-slate-500">Period Filter</Label>
+                            <div className="grid grid-cols-2 gap-1.5">
                                 {[
-                                    { id: '1_month', label: '📅 1 Bulan Ini (Default)' },
-                                    { id: 'custom', label: '🗓️ Rentang Tanggal' },
-                                    { id: '7days', label: '⚡ 7 Hari' },
-                                    { id: 'today', label: '☀️ Hari Ini' },
-                                    { id: 'all', label: '🌐 Semua Waktu' }
+                                    { id: 'all', label: 'All' },
+                                    { id: 'custom', label: 'Custom Range' }
                                 ].map(opt => {
                                     const isSel = period === opt.id;
                                     return (
@@ -573,10 +587,10 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                                             key={opt.id}
                                             type="button"
                                             onClick={() => setPeriod(opt.id)}
-                                            className={`py-1.5 px-2 rounded-lg border-2 text-[11px] font-black transition-all active:scale-95 truncate ${
+                                            className={`py-1.5 px-2 rounded-xl text-[11px] font-medium transition-all active:scale-95 truncate ${
                                                 isSel
-                                                    ? 'bg-indigo-500 text-black border-black dark:border-white shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]'
-                                                    : 'bg-card text-foreground border-black dark:border-zinc-800 hover:bg-muted'
+                                                    ? 'bg-blue-600 text-white shadow-xs'
+                                                    : 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50'
                                             }`}
                                         >
                                             {opt.label}
@@ -588,25 +602,25 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
 
                         {/* Custom Date Inputs if 'custom' is selected */}
                         {period === 'custom' && (
-                            <div className="p-2.5 bg-card rounded-xl border-2 border-black dark:border-zinc-800 space-y-1.5">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase">Pilih Rentang Tanggal Kustom:</span>
+                            <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1.5">
+                                <span className="text-[10px] font-medium text-slate-500 uppercase">Custom Dates</span>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="text-[9px] font-bold text-muted-foreground block mb-0.5">Dari Tanggal</label>
+                                        <label className="text-[9px] font-medium text-slate-500 block mb-0.5">From</label>
                                         <input
                                             type="date"
                                             value={customStartDate}
                                             onChange={(e) => setCustomStartDate(e.target.value)}
-                                            className="w-full h-9 px-2 text-xs font-bold rounded-lg border-2 border-black dark:border-white bg-white text-black focus:outline-none"
+                                            className="w-full h-9 px-2 text-xs font-medium rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-bold text-muted-foreground block mb-0.5">Sampai Tanggal</label>
+                                        <label className="text-[9px] font-medium text-slate-500 block mb-0.5">To</label>
                                         <input
                                             type="date"
                                             value={customEndDate}
                                             onChange={(e) => setCustomEndDate(e.target.value)}
-                                            className="w-full h-9 px-2 text-xs font-bold rounded-lg border-2 border-black dark:border-white bg-white text-black focus:outline-none"
+                                            className="w-full h-9 px-2 text-xs font-medium rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                         />
                                     </div>
                                 </div>
@@ -614,30 +628,30 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                         )}
 
                         {/* Jenis Transaksi & Kategori */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-border/80">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
                             <div>
-                                <Label className="text-[10px] font-black mb-1 block">Jenis Transaksi</Label>
+                                <Label className="text-[10px] font-medium text-slate-500 mb-1 block">Type</Label>
                                 <select
                                     value={type}
                                     onChange={(e) => setType(e.target.value)}
-                                    className="w-full h-9 rounded-lg border-2 border-black dark:border-white bg-card text-foreground font-black px-2.5 text-xs shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] focus:outline-none"
+                                    className="w-full h-9 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-medium px-2.5 text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 >
-                                    <option value="">Semua Jenis Transaksi</option>
-                                    <option value="expense">Pengeluaran Only</option>
-                                    <option value="income">Pemasukan Only</option>
+                                    <option value="">All Types</option>
+                                    <option value="expense">Expense</option>
+                                    <option value="income">Income</option>
                                 </select>
                             </div>
                             <div>
-                                <Label className="text-[10px] font-black mb-1 block">Kategori</Label>
+                                <Label className="text-[10px] font-medium text-slate-500 mb-1 block">Category</Label>
                                 <select
                                     value={categoryId}
                                     onChange={(e) => setCategoryId(e.target.value)}
-                                    className="w-full h-9 rounded-lg border-2 border-black dark:border-white bg-card text-foreground font-black px-2.5 text-xs shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] focus:outline-none"
+                                    className="w-full h-9 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-medium px-2.5 text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 >
-                                    <option value="">Semua Kategori</option>
+                                    <option value="">All Categories</option>
                                     {categories.map(c => (
                                         <option key={c.id} value={c.id}>
-                                            {c.name} ({c.type === 'expense' ? 'Pengeluaran' : 'Pemasukan'})
+                                            {c.name} ({c.type === 'expense' ? 'Expense' : 'Income'})
                                         </option>
                                     ))}
                                 </select>
@@ -647,17 +661,17 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                 )}
 
                 {/* Filter Summary Metrics Pill */}
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-card dark:bg-[#18181b] rounded-xl border-2 border-black dark:border-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-black text-black bg-indigo-400 px-2 py-0.5 rounded-md border border-black">
+                        <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200/60 dark:border-slate-700/60">
                             {getPeriodDescription()}
                         </span>
-                        <span className="text-[11px] font-bold text-muted-foreground">
-                            {metrics.count} Transaksi
+                        <span className="text-[11px] font-medium text-slate-500">
+                            {metrics.count} Items
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-[11px] font-extrabold">
+                    <div className="flex items-center gap-3 text-xs font-semibold">
                         <span className="text-emerald-600 dark:text-emerald-400">
                             +{formatCurrency(metrics.totalIncome)}
                         </span>
@@ -670,10 +684,14 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
 
             {/* Mobile Card List View (< md) */}
             <div className="md:hidden space-y-2">
-                {paginated.length === 0 ? (
-                    <div className="p-8 text-center text-muted-foreground text-xs rounded-xl border-2 border-black dark:border-white bg-card dark:bg-[#18181b] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none">
-                        Tidak ada transaksi yang sesuai filter.
-                    </div>
+                {isLoading && transactions.length === 0 ? (
+                    <SkeletonList count={4} itemHeight="h-16" />
+                ) : paginated.length === 0 ? (
+                    <EmptyState 
+                        icon="list" 
+                        title="No transactions found" 
+                        description="Try adjusting your filters or date range."
+                    />
                 ) : (
                     paginated.map(t => (
                         <TransactionItem
@@ -690,55 +708,63 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
 
             {/* Desktop Table View (>= md) */}
             <div className="hidden md:block">
-                <div className="overflow-hidden rounded-xl border-2 border-black dark:border-white bg-card dark:bg-[#18181b] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
+                <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs sm:text-sm">
                             <thead>
-                                <tr className="border-b-2 border-black dark:border-white bg-muted/40 dark:bg-zinc-900 text-foreground text-[11px] uppercase font-black tracking-wider">
-                                    <th className="text-left p-3.5">Tanggal</th>
-                                    <th className="text-left p-3.5">Kategori</th>
-                                    <th className="text-left p-3.5">Jenis</th>
-                                    <th className="text-right p-3.5">Jumlah</th>
-                                    <th className="text-left p-3.5">Catatan</th>
-                                    <th className="text-center p-3.5">Aksi</th>
+                                <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                    <th className="text-left p-3.5">Date</th>
+                                    <th className="text-left p-3.5">Category</th>
+                                    <th className="text-left p-3.5">Type</th>
+                                    <th className="text-right p-3.5">Amount</th>
+                                    <th className="text-left p-3.5">Note</th>
+                                    <th className="text-center p-3.5">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-border/60 dark:divide-zinc-800">
-                                {paginated.length === 0 ? (
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {isLoading && transactions.length === 0 ? (
+                                    [1, 2, 3, 4, 5].map(i => (
+                                        <tr key={`skel-${i}`}>
+                                            <td colSpan="6" className="p-3">
+                                                <div className="h-6 w-full skeleton-shimmer rounded-lg"></div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : paginated.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6" className="text-center p-8 text-muted-foreground text-xs font-bold">
-                                            Tidak ada transaksi yang sesuai filter.
+                                        <td colSpan="6" className="text-center p-8 text-slate-400 text-xs font-medium">
+                                            No transactions found.
                                         </td>
                                     </tr>
                                 ) : (
                                     paginated.map(t => (
-                                        <tr key={t.id} className="hover:bg-muted/30 dark:hover:bg-zinc-900/50 transition-colors">
-                                            <td className="p-3.5 font-bold text-muted-foreground">{formatDate(t.date)}</td>
+                                        <tr key={t.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                            <td className="p-3.5 font-medium text-slate-500">{formatDate(t.date)}</td>
                                             <td className="p-3.5">
                                                 <div className="flex items-center gap-2">
                                                     <div 
-                                                        className="w-7 h-7 rounded-full border border-black dark:border-zinc-800 flex items-center justify-center shrink-0 text-sm shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] dark:shadow-none"
-                                                        style={{ backgroundColor: t.category?.color || '#FFADAD' }}
+                                                        className="w-7 h-7 rounded-lg border border-black/5 dark:border-white/10 flex items-center justify-center shrink-0 text-sm shadow-xs"
+                                                        style={{ backgroundColor: `${t.category?.color || '#FFADAD'}25`, color: t.category?.color || '#FFADAD' }}
                                                     >
                                                         {window.getCategoryIcon ? window.getCategoryIcon(t.category?.name, t.type) : '🏷️'}
                                                     </div>
-                                                    <span className="font-bold text-foreground">{t.category?.name || '-'}</span>
+                                                    <span className="font-semibold text-slate-900 dark:text-slate-100">{t.category?.name || '-'}</span>
                                                 </div>
                                             </td>
                                             <td className="p-3.5">
                                                 <span className={`inline-flex items-center ${NB.typeBadge(t.type)}`}>
-                                                    {t.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                                                    {t.type === 'income' ? 'Income' : 'Expense'}
                                                 </span>
                                             </td>
-                                            <td className="text-right p-3.5 font-black">
+                                            <td className="text-right p-3.5 font-semibold">
                                                 <span className={NB.amountColor(t.type)}>
                                                     {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                                                 </span>
                                             </td>
-                                            <td className="p-3.5 text-xs text-muted-foreground max-w-[200px] truncate">{t.note || '-'}</td>
+                                            <td className="p-3.5 text-xs text-slate-500 max-w-[200px] truncate">{t.note || '-'}</td>
                                             <td className="text-center p-3.5 space-x-1">
-                                                <button onClick={() => onEdit(t)} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800 rounded-lg text-indigo-600 transition-colors" aria-label="Edit"><Icon name="edit" size={15} /></button>
-                                                <button onClick={() => onDelete(t.id)} className="p-1.5 hover:bg-rose-500/10 rounded-lg text-rose-600 transition-colors" aria-label="Hapus"><Icon name="trash" size={15} /></button>
+                                                <button onClick={() => onEdit(t)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-blue-600 dark:text-blue-400 transition-colors" aria-label="Edit"><Icon name="edit" size={15} /></button>
+                                                <button onClick={() => onDelete(t.id)} className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-rose-600 transition-colors" aria-label="Delete"><Icon name="trash" size={15} /></button>
                                             </td>
                                         </tr>
                                     ))
@@ -754,14 +780,14 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
             <Modal
                 isOpen={!!selectedTx}
                 onClose={() => setSelectedTx(null)}
-                title="Detail Transaksi"
+                title="Transaction Details"
             >
                 {selectedTx && (
                     <div className="space-y-4">
-                        <div className="flex items-center gap-3 p-3.5 bg-muted/40 dark:bg-zinc-900 rounded-xl border-2 border-black dark:border-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-800">
                             <div
-                                className="w-12 h-12 rounded-full border-2 border-black dark:border-zinc-800 flex items-center justify-center shrink-0 text-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-none"
-                                style={{ backgroundColor: selectedTx.category?.color || '#FFADAD' }}
+                                className="w-12 h-12 rounded-2xl border border-black/5 dark:border-white/10 flex items-center justify-center shrink-0 text-xl shadow-xs"
+                                style={{ backgroundColor: `${selectedTx.category?.color || '#FFADAD'}25`, color: selectedTx.category?.color || '#FFADAD' }}
                             >
                                 {window.getCategoryIcon ? window.getCategoryIcon(selectedTx.category?.name, selectedTx.type) : '🏷️'}
                             </div>
@@ -781,12 +807,12 @@ window.TransactionsView = React.memo(({ user, transactions, categories, onRefres
                         </div>
 
                         {selectedTx.note ? (
-                            <div className="p-3 bg-muted/30 dark:bg-zinc-900/60 rounded-xl border-2 border-black dark:border-zinc-800 text-xs space-y-1">
-                                <span className="font-bold text-muted-foreground uppercase text-[10px]">Catatan</span>
-                                <p className="font-semibold text-foreground">{selectedTx.note}</p>
+                            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-800 text-xs space-y-1">
+                                <span className="font-semibold text-slate-400 uppercase text-[10px]">Catatan</span>
+                                <p className="font-medium text-slate-800 dark:text-slate-200">{selectedTx.note}</p>
                             </div>
                         ) : (
-                            <div className="p-3 bg-muted/20 dark:bg-zinc-900/40 rounded-xl border border-border dark:border-zinc-800 text-xs text-muted-foreground font-medium">
+                            <div className="p-3.5 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 text-xs text-slate-400 font-normal">
                                 Tidak ada catatan tambahan.
                             </div>
                         )}

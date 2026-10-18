@@ -14,7 +14,7 @@ const { useState, useEffect, useContext, createContext, useMemo, useCallback, us
 const CONFIG = window.CONFIG || {
     SUPABASE_URL: '',
     SUPABASE_ANON_KEY: '',
-    SESSION_TIMEOUT: 30 * 60 * 1000,
+    SESSION_TIMEOUT: 30 * 24 * 60 * 60 * 1000,
 };
 
 window.VIEWS = {
@@ -93,13 +93,17 @@ window.api = {
             .single();
 
         if (queryError || !user) {
-            const { data: fallbackUser } = await supabase
+            const { data: fallbackUser, error: fallbackErr } = await supabase
                 .from('users')
                 .select('*')
                 .limit(1)
                 .maybeSingle();
             if (fallbackUser) {
                 user = fallbackUser;
+            } else if (queryError && (queryError.status === 401 || queryError.message?.includes('apiKey'))) {
+                throw new Error('Koneksi Supabase Gagal (Harap Refresh Halaman)');
+            } else if (queryError && queryError.message?.includes('Failed to fetch')) {
+                throw new Error('Koneksi Internet/DNS Bermasalah (Gagal menghubungi Supabase)');
             } else {
                 throw new Error('USER_NOT_FOUND');
             }
@@ -164,6 +168,7 @@ window.api = {
 
         if (filters.type) query = query.eq('type', filters.type);
         if (filters.categoryId) query = query.eq('category_id', filters.categoryId);
+        if (filters.limit) query = query.limit(filters.limit);
 
         let { data, error } = await query;
         if (error) {
@@ -177,6 +182,7 @@ window.api = {
                 .order('id', { ascending: false });
             if (filters.type) query = query.eq('type', filters.type);
             if (filters.categoryId) query = query.eq('category_id', filters.categoryId);
+            if (filters.limit) query = query.limit(filters.limit);
             const res = await query;
             data = res.data;
             if (res.error) throw res.error;
@@ -280,10 +286,13 @@ window.api = {
                 .insert([payload])
                 .select()
                 .single();
-            if (error) throw error;
+            if (error) {
+                console.error('[api.addFamilyNote] Supabase error:', error);
+                throw error;
+            }
             return data;
         } catch (err) {
-            console.warn('[api.addFamilyNote] Notice (saved locally):', err.message);
+            console.error('[api.addFamilyNote] Failed to save to Supabase:', err);
             return null;
         }
     },
@@ -407,7 +416,7 @@ const App = () => {
 
     // Finance Data (extracted to hook)
     const toast = window.useToast();
-    const { transactions, categories, isRefreshing, loadData, handleManualRefresh } = useFinanceData(user, window.api, toast);
+    const { transactions, categories, isLoading, isRefreshing, loadData, handleManualRefresh } = useFinanceData(user, window.api, toast);
 
     // Family Notes Data (Hook for Catatan Keluarga)
     const familyNotesState = useFamilyNotes(user, window.api, toast);
@@ -453,6 +462,9 @@ const App = () => {
 
     // Navigation
     const [currentView, setCurrentView] = useState(window.VIEWS.DASHBOARD);
+
+    // AI Advisor Modal State
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
     // Global Transaction Modal State
     const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -525,86 +537,110 @@ const App = () => {
         }
     }, [deleteConfirm, loadData, toast]);
 
+    const [isInSubpage, setIsInSubpage] = useState(false);
+
     // --- Render ---
     if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-muted-foreground text-sm">⏳ Memuat...</div>;
     if (!user) return <LoginPage onLogin={handleLogin} />;
 
     const navItems = [
         { id: window.VIEWS.DASHBOARD, label: 'Dashboard', icon: 'home' },
-        { id: window.VIEWS.TRANSACTIONS, label: 'Transaksi', icon: 'list' },
-        { id: window.VIEWS.FAMILY_NOTES, label: 'Catatan', icon: 'fileText' },
-        { id: window.VIEWS.CATEGORIES, label: 'Kategori', icon: 'folder' },
-        { id: window.VIEWS.SETTINGS, label: 'Pengaturan', icon: 'settings' },
+        { id: window.VIEWS.TRANSACTIONS, label: 'Transactions', icon: 'list' },
+        { id: window.VIEWS.FAMILY_NOTES, label: 'Notes', icon: 'fileText' },
+        { id: window.VIEWS.SETTINGS, label: 'Settings', icon: 'settings' },
     ];
 
-    const currentTitle = navItems.find(i => i.id === currentView)?.label || 'Dashboard';
+    const currentTitle = navItems.find(i => i.id === currentView)?.label || (currentView === window.VIEWS.CATEGORIES ? 'Categories' : 'Dashboard');
 
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             {/* Desktop Sidebar (>= md) */}
-            <aside className="hidden md:flex w-60 flex-col border-r border-border/80 bg-card">
-                <div className="p-5 flex items-center gap-3">
-                    <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-xs">
-                        <Icon name="wallet" size={22} />
+            {!isInSubpage && (
+                <aside className="hidden md:flex w-64 flex-col border-r border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl">
+                    <div className="p-6 flex items-center gap-3">
+                        <div className="bg-blue-600 text-white p-2.5 rounded-2xl shadow-sm">
+                            <Icon name="wallet" size={20} />
+                        </div>
+                        <div>
+                            <h1 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-white">ISZA FAMILY</h1>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium tracking-wide">FINANCE DASHBOARD</p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="font-extrabold text-base tracking-tight">ISZA FAMILY</h1>
-                        <p className="text-[10px] text-muted-foreground font-semibold uppercase">Personal Dashboard</p>
-                    </div>
-                </div>
-                <nav className="flex-1 px-3 space-y-1">
-                    {navItems.map(item => (
+                    <nav className="flex-1 px-3.5 space-y-1">
+                        {navItems.map(item => {
+                            const isActive = currentView === item.id || (item.id === window.VIEWS.SETTINGS && currentView === window.VIEWS.CATEGORIES);
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setCurrentView(item.id)}
+                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
+                                        isActive
+                                            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold'
+                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    <Icon name={item.icon} size={17} />
+                                    {item.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
                         <button
-                            key={item.id}
-                            onClick={() => setCurrentView(item.id)}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                currentView === item.id
-                                    ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                            }`}
+                            type="button"
+                            onClick={() => setIsAiModalOpen(true)}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm hover:opacity-95 active:scale-98 transition-all"
                         >
-                            <Icon name={item.icon} size={18} />
-                            {item.label}
+                            <Icon name="sparkles" size={15} /> Isza AI Advisor
                         </button>
-                    ))}
-                </nav>
-                <div className="p-3.5 border-t border-border/80">
-                    <div className="flex items-center gap-2.5 px-2 py-1.5">
-                        <div className="w-8 h-8 rounded-full bg-indigo-600/15 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                            {user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                        <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                            <div className="w-8 h-8 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-semibold text-xs shrink-0">
+                                {user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                                <p className="text-xs font-medium truncate text-slate-900 dark:text-slate-200">{user?.email || ''}</p>
+                            </div>
                         </div>
-                        <div className="flex-1 overflow-hidden">
-                            <p className="text-xs font-bold truncate text-foreground">{user?.email || ''}</p>
-                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-2 rounded-xl text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                        >
+                            <Icon name="logOut" size={15} /> Log Out
+                        </button>
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-3 py-2 mt-1.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-500/10 transition-colors"
-                    >
-                        <Icon name="logOut" size={15} /> Keluar
-                    </button>
-                </div>
-            </aside>
+                </aside>
+            )}
             {/* Main Content Layout Area */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 {/* Mobile Top Header (< md) */}
-                <header className="md:hidden flex items-center justify-between px-4 py-6 border-b-2 border-black dark:border-white bg-card sticky top-0 z-30">
-                    <div className="flex items-center gap-2">
-                        <div className={`bg-indigo-500 text-black p-1.5 rounded-lg ${NB.borderThin} ${NB.shadow.sm}`}>
-                            <Icon name="wallet" size={18} />
+                {!isInSubpage && (
+                    <header className="md:hidden flex items-center justify-between px-5 pt-safe pb-3.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl sticky top-0 z-30 transition-all">
+                        <div className="flex items-center gap-2.5">
+                            <div className="bg-blue-600 text-white p-1.5 rounded-xl shadow-xs">
+                                <Icon name="wallet" size={16} />
+                            </div>
+                            <span className="font-semibold text-sm tracking-tight text-slate-900 dark:text-white">{currentTitle}</span>
                         </div>
-                        <span className="font-extrabold text-sm tracking-tight text-foreground">{currentTitle}</span>
-                    </div>
-                </header>
+                        <button
+                            type="button"
+                            onClick={() => setIsAiModalOpen(true)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/40 text-xs font-semibold active:scale-95 transition-all shadow-xs"
+                        >
+                            <Icon name="sparkles" size={14} className="text-blue-600 dark:text-blue-400" />
+                            <span>AI Advisor</span>
+                        </button>
+                    </header>
+                )}
 
                 {/* Scrollable View Content */}
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 sm:pb-32 md:pb-8">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 sm:pb-28 md:pb-8">
                     <div className="mx-auto max-w-4xl">
                         {currentView === window.VIEWS.DASHBOARD && (
                             <DashboardView 
                                 user={user} 
                                 transactions={transactions} 
                                 categories={categories} 
+                                isLoading={isLoading}
                                 dashboardSettings={dashboardSettings} 
                                 familyNotesState={familyNotesState}
                                 planningState={planningState}
@@ -619,6 +655,7 @@ const App = () => {
                                 user={user} 
                                 transactions={transactions} 
                                 categories={categories} 
+                                isLoading={isLoading}
                                 onRefresh={loadData} 
                                 onEdit={openEditTransactionModal} 
                                 onDelete={setDeleteConfirm} 
@@ -628,7 +665,13 @@ const App = () => {
                             <FamilyNotesView 
                                 user={user} 
                                 familyNotesState={familyNotesState} 
-                                onRefresh={() => familyNotesState.loadNotes(false)} 
+                                planningState={planningState}
+                                categories={categories}
+                                onRefresh={() => {
+                                    familyNotesState.loadNotes(false);
+                                    loadData(false);
+                                }} 
+                                onSubpageToggle={setIsInSubpage}
                             />
                         )}
                         {currentView === window.VIEWS.CATEGORIES && (
@@ -636,6 +679,7 @@ const App = () => {
                                 user={user} 
                                 categories={categories} 
                                 onRefresh={loadData} 
+                                onBack={() => setCurrentView(window.VIEWS.SETTINGS)}
                             />
                         )}
                         {currentView === window.VIEWS.SETTINGS && (
@@ -643,105 +687,149 @@ const App = () => {
                                 user={user} 
                                 onUpdateUser={setUser} 
                                 onLogout={handleLogout} 
+                                onManageCategories={() => setCurrentView(window.VIEWS.CATEGORIES)}
+                                categoriesCount={categories.length}
                             />
                         )}
                     </div>
                 </main>
 
-                {/* Mobile Bottom Navigation */}
-                <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#faf8f5] dark:bg-zinc-950 border-t-2 border-black dark:border-white pb-safe">
-                    <nav className="flex justify-between items-center h-16 px-1">
-                        {navItems.slice(0, 2).map(item => {
-                            const isActive = currentView === item.id;
-                            return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setCurrentView(item.id)}
-                                    className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all duration-200 ${
-                                        isActive
-                                            ? 'text-foreground font-black scale-105'
-                                            : 'text-muted-foreground hover:text-foreground active:scale-95'
-                                    }`}
-                                >
-                                    <div className={`p-1.5 rounded-lg transition-all ${isActive ? `bg-indigo-500 text-black ${NB.borderThin} ${NB.shadow.sm}` : ''}`}>
-                                        <Icon name={item.icon} size={18} />
-                                    </div>
-                                    <span className="text-[9px] tracking-tight mt-0.5">{item.label}</span>
-                                </button>
-                            );
-                        })}
+                {/* Mobile Bottom Navigation (4 Tabs + Floating Action Button) */}
+                {!isInSubpage && (
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-t border-slate-200/80 dark:border-slate-800/80 pb-safe">
+                        <nav className="flex justify-between items-center h-16 px-3 relative">
+                            {/* Tab 1: Dashboard */}
+                            {(() => {
+                                const item = navItems[0];
+                                const isActive = currentView === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setCurrentView(item.id)}
+                                        className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
+                                            isActive ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400' : ''}`}>
+                                            <Icon name={item.icon} size={20} />
+                                        </div>
+                                        <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+                                    </button>
+                                );
+                            })()}
 
-                        {/* Center FAB */}
-                        <div className="flex-1 flex justify-center h-full relative">
-                            <button
-                                onClick={openAddTransactionModal}
-                                className={`absolute -top-5 w-11 h-11 bg-indigo-500 text-black rounded-full flex items-center justify-center ${NB.shadow.md} ${NB.border} hover:-translate-y-0.5 active:scale-90 transition-all z-50 shrink-0`}
-                                aria-label="Shortcut Tambah Transaksi"
-                            >
-                                <Icon name="plus" size={22} />
-                            </button>
-                        </div>
+                            {/* Tab 2: Transaksi */}
+                            {(() => {
+                                const item = navItems[1];
+                                const isActive = currentView === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setCurrentView(item.id)}
+                                        className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
+                                            isActive ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400' : ''}`}>
+                                            <Icon name={item.icon} size={20} />
+                                        </div>
+                                        <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+                                    </button>
+                                );
+                            })()}
 
-                        {navItems.slice(2).map(item => {
-                            const isActive = currentView === item.id;
-                            return (
+                            {/* Center FAB */}
+                            <div className="flex-1 flex justify-center h-full relative">
                                 <button
-                                    key={item.id}
-                                    onClick={() => setCurrentView(item.id)}
-                                    className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all duration-200 ${
-                                        isActive
-                                            ? 'text-foreground font-black scale-105'
-                                            : 'text-muted-foreground hover:text-foreground active:scale-95'
-                                    }`}
+                                    onClick={openAddTransactionModal}
+                                    className="absolute -top-4 w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/25 hover:bg-blue-700 active:scale-95 transition-all z-50 shrink-0 border-2 border-white dark:border-slate-900"
+                                    aria-label="Shortcut Tambah Transaksi"
                                 >
-                                    <div className={`p-1.5 rounded-lg transition-all ${isActive ? `bg-indigo-500 text-black ${NB.borderThin} ${NB.shadow.sm}` : ''}`}>
-                                        <Icon name={item.icon} size={18} />
-                                    </div>
-                                    <span className="text-[9px] tracking-tight mt-0.5">{item.label}</span>
+                                    <Icon name="plus" size={22} />
                                 </button>
-                            );
-                        })}
-                    </nav>
-                </div>
+                            </div>
+
+                            {/* Tab 3: Catatan */}
+                            {(() => {
+                                const item = navItems[2];
+                                const isActive = currentView === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setCurrentView(item.id)}
+                                        className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
+                                            isActive ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400' : ''}`}>
+                                            <Icon name={item.icon} size={20} />
+                                        </div>
+                                        <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+                                    </button>
+                                );
+                            })()}
+
+                            {/* Tab 4: Pengaturan */}
+                            {(() => {
+                                const item = navItems[3];
+                                const isActive = currentView === item.id || currentView === window.VIEWS.CATEGORIES;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setCurrentView(item.id)}
+                                        className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
+                                            isActive ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400' : ''}`}>
+                                            <Icon name={item.icon} size={20} />
+                                        </div>
+                                        <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+                                    </button>
+                                );
+                            })()}
+                        </nav>
+                    </div>
+                )}
             </div>
 
             {/* Shared Add/Edit Transaction Modal */}
-            <Modal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} title={editingTransaction ? "Edit Transaksi" : "Tambah Transaksi"}>
+            <Modal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} title={editingTransaction ? "Edit Transaction" : "New Transaction"}>
                 <div className="space-y-4">
                     <div className="space-y-1">
-                        <Label>Jenis Transaksi</Label>
+                        <Label>Type</Label>
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={() => setFormData({...formData, type: 'expense'})}
-                                className={`py-2.5 rounded-lg ${NB.border} text-xs font-black flex items-center justify-center gap-2 transition-all ${
+                                className={`py-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition-all ${
                                     formData.type === 'expense'
-                                        ? `bg-rose-400 text-black ${NB.shadow.md}`
-                                        : 'bg-card text-muted-foreground hover:bg-muted'
+                                        ? 'bg-rose-500 text-white shadow-xs border-rose-600'
+                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
                                 }`}
                             >
-                                <Icon name="arrowUpRight" size={15} /> Pengeluaran
+                                <Icon name="arrowUpRight" size={15} /> Expense
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setFormData({...formData, type: 'income'})}
-                                className={`py-2.5 rounded-lg ${NB.border} text-xs font-black flex items-center justify-center gap-2 transition-all ${
+                                className={`py-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition-all ${
                                     formData.type === 'income'
-                                        ? `bg-emerald-400 text-black ${NB.shadow.md}`
-                                        : 'bg-card text-muted-foreground hover:bg-muted'
+                                        ? 'bg-emerald-600 text-white shadow-xs border-emerald-700'
+                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
                                 }`}
                             >
-                                <Icon name="arrowDownLeft" size={15} /> Pemasukan
+                                <Icon name="arrowDownLeft" size={15} /> Income
                             </button>
                         </div>
                     </div>
 
                     {/* Category Chips */}
                     <div className="space-y-1">
-                        <Label>Kategori</Label>
+                        <Label>Category</Label>
                         {categories.filter(c => c.type === formData.type).length === 0 ? (
                             <p className="text-xs text-muted-foreground py-2 leading-relaxed">
-                                Belum ada kategori untuk jenis ini. Silakan tambah kategori baru di menu Kategori.
+                                No categories available for this type.
                             </p>
                         ) : (
                             <div className="flex flex-wrap gap-2 pt-1 max-h-40 overflow-y-auto">
@@ -754,14 +842,14 @@ const App = () => {
                                                 key={cat.id}
                                                 type="button"
                                                 onClick={() => setFormData({ ...formData, category_id: cat.id })}
-                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black ${NB.border} transition-all active:scale-95 ${NB.shadow.sm} ${
+                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
                                                     isSelected
-                                                        ? 'bg-indigo-500 text-black'
-                                                        : 'bg-card text-muted-foreground hover:bg-muted'
+                                                        ? 'bg-blue-600 text-white shadow-xs'
+                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
                                                 }`}
                                             >
                                                 <span
-                                                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${NB.borderThin}`}
+                                                    className="w-2.5 h-2.5 rounded-full shrink-0"
                                                     style={{ backgroundColor: isSelected ? '#ffffff' : cat.color }}
                                                 />
                                                 {cat.name}
@@ -774,7 +862,7 @@ const App = () => {
                     </div>
 
                     <div className="space-y-1">
-                        <Label>Jumlah (Rp)</Label>
+                        <Label>Amount</Label>
                         <Input
                             type="number"
                             inputMode="numeric"
@@ -784,7 +872,7 @@ const App = () => {
                         />
                     </div>
                     <div className="space-y-1">
-                        <Label>Tanggal</Label>
+                        <Label>Date</Label>
                         <div className="relative flex items-center">
                             <Input
                                 type="date"
@@ -798,27 +886,42 @@ const App = () => {
                         </div>
                     </div>
                     <div className="space-y-1">
-                        <Label>Catatan (opsional)</Label>
+                        <Label>Note</Label>
                         <Input
                             value={formData.note}
                             onChange={(e) => setFormData({...formData, note: e.target.value})}
-                            placeholder="Tambahkan catatan singkat..."
+                            placeholder="Optional note"
                         />
                     </div>
                     <div className="flex gap-2 pt-2">
-                        <Button variant="outline" onClick={() => setIsTransactionModalOpen(false)} className="flex-1">Batal</Button>
-                        <Button onClick={handleSaveTransaction} className="flex-1 font-bold">Simpan</Button>
+                        <Button variant="outline" onClick={() => setIsTransactionModalOpen(false)} className="flex-1">Cancel</Button>
+                        <Button onClick={handleSaveTransaction} className="flex-1 font-medium bg-blue-600 hover:bg-blue-700 text-white">Save</Button>
                     </div>
                 </div>
             </Modal>
+
+            {/* AI Advisor Modal */}
+            <AiAdvisorModal
+                isOpen={isAiModalOpen}
+                onClose={() => setIsAiModalOpen(false)}
+                financialData={{
+                    transactions,
+                    categories,
+                    planning: planningState?.planningList || [],
+                    familyNotes: familyNotesState?.notes || [],
+                    user
+                }}
+            />
 
             {/* Shared Delete Confirmation */}
             <ConfirmModal
                 isOpen={!!deleteConfirm}
                 onClose={() => setDeleteConfirm(null)}
                 onConfirm={handleDeleteTransaction}
-                title="Hapus Transaksi"
-                message="Apakah Anda yakin ingin menghapus transaksi ini?"
+                title="Delete Transaction"
+                message="Are you sure you want to delete this transaction?"
+                confirmText="Delete"
+                cancelText="Cancel"
             />
         </div>
     );
@@ -839,11 +942,21 @@ const Root = () => (
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<Root />);
 
-// Register PWA Service Worker
+// Register PWA Service Worker with forced update
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('PWA Service Worker registered:', reg.scope))
+            .then(reg => {
+                console.log('PWA Service Worker registered:', reg.scope);
+                // Force check for update immediately
+                reg.update();
+            })
             .catch(err => console.log('PWA Service Worker registration failed:', err));
+        
+        // Listen for new SW and auto-activate
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('New Service Worker activated — reloading for fresh cache.');
+            window.location.reload();
+        });
     });
 }

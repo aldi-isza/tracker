@@ -24,6 +24,9 @@ window.Icon = ({ name, className = "", size = 24 }) => {
         check: <polyline points="20 6 9 17 4 12"/>,
         arrowUpRight: <><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></>,
         arrowDownLeft: <><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></>,
+        arrowLeft: <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
+        arrowRight: <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>,
+        barChart: <><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></>,
         wallet: <><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-3"/><path d="M18 12h.01"/><path d="M16 8h5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/></>,
         user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
         shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
@@ -33,12 +36,17 @@ window.Icon = ({ name, className = "", size = 24 }) => {
         search: <><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></>,
         fileText: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></>,
         wrench: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></>,
+        eyeOff: <><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></>,
         clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
         tag: <><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><line x1="7" x2="7.01" y1="7" y2="7"/></>,
         calendarCheck: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></>,
         car: <><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></>,
         zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
-        target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>
+        target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+        sparkles: <><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></>,
+        messageSquare: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>,
+        bot: <><rect width="18" height="12" x="3" y="6" rx="2"/><path d="M9 13v-2"/><path d="M15 13v-2"/><path d="M12 2v4"/></>,
+        send: <><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>
     };
     
     return (
@@ -50,18 +58,18 @@ window.Icon = ({ name, className = "", size = 24 }) => {
 
 window.Button = React.forwardRef(({ className = "", variant = "default", size = "default", ...props }, ref) => {
     const variants = {
-        default: "bg-indigo-500 hover:bg-indigo-600 text-black border-2 border-black dark:border-white font-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]",
-        destructive: "bg-rose-400 hover:bg-rose-500 text-black border-2 border-black dark:border-white font-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]",
-        outline: "border-2 border-black dark:border-white bg-card hover:bg-muted text-foreground font-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]",
-        secondary: "bg-secondary text-secondary-foreground border-2 border-black dark:border-white font-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]",
-        ghost: "text-muted-foreground hover:text-foreground font-bold hover:bg-muted/40",
-        success: "bg-emerald-400 hover:bg-emerald-500 text-black border-2 border-black dark:border-white font-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]",
+        default: "bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm hover:shadow transition-all active:scale-[0.98] border border-transparent",
+        destructive: "bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 font-medium border border-rose-200/60 dark:border-rose-800/60 shadow-sm active:scale-[0.98]",
+        outline: "border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-medium shadow-sm active:scale-[0.98]",
+        secondary: "bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-medium border border-transparent active:scale-[0.98]",
+        ghost: "text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-[0.98]",
+        success: "bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm active:scale-[0.98] border border-transparent",
     };
     const sizes = {
-        default: "h-11 px-5 text-sm rounded-lg",
-        sm: "h-9 px-3.5 text-xs rounded-md",
-        lg: "h-12 px-6 text-base rounded-xl",
-        icon: "h-10 w-10 rounded-lg",
+        default: "h-10 px-4 text-xs rounded-xl",
+        sm: "h-8 px-3 text-xs rounded-lg",
+        lg: "h-11 px-5 text-sm rounded-xl",
+        icon: "h-9 w-9 rounded-xl",
     };
     return (
         <button
@@ -76,7 +84,7 @@ window.Input = React.forwardRef(({ className = "", type, ...props }, ref) => {
     return (
         <input
             type={type}
-            className={`flex h-11 w-full rounded-lg border-2 border-black dark:border-white bg-white text-black font-extrabold px-3.5 py-2 text-sm transition-all placeholder:text-neutral-500 focus-visible:outline-none focus:ring-0 focus:translate-x-[0.5px] focus:translate-y-[0.5px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+            className={`flex h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium px-3.5 py-2 text-xs transition-all placeholder:text-slate-400 focus-visible:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-xs disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
             ref={ref}
             {...props}
         />
@@ -84,11 +92,11 @@ window.Input = React.forwardRef(({ className = "", type, ...props }, ref) => {
 });
 
 window.Label = React.forwardRef(({ className = "", ...props }, ref) => (
-    <label ref={ref} className={`text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground ${className}`} {...props} />
+    <label ref={ref} className={`text-[11px] font-medium tracking-normal text-slate-500 dark:text-slate-400 ${className}`} {...props} />
 ));
 
 window.Card = React.forwardRef(({ className = "", ...props }, ref) => (
-    <div ref={ref} className={`rounded-xl border-2 border-black dark:border-white bg-card text-card-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] transition-all ${className}`} {...props} />
+    <div ref={ref} className={`rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] dark:shadow-none transition-all ${className}`} {...props} />
 ));
 
 window.CardHeader = React.forwardRef(({ className = "", ...props }, ref) => (
@@ -96,7 +104,7 @@ window.CardHeader = React.forwardRef(({ className = "", ...props }, ref) => (
 ));
 
 window.CardTitle = React.forwardRef(({ className = "", ...props }, ref) => (
-    <h3 ref={ref} className={`font-extrabold leading-none tracking-tight ${className}`} {...props} />
+    <h3 ref={ref} className={`font-semibold text-sm tracking-tight text-slate-900 dark:text-white ${className}`} {...props} />
 ));
 
 window.CardContent = React.forwardRef(({ className = "", ...props }, ref) => (
@@ -108,16 +116,16 @@ window.Modal = ({ isOpen, onClose, title, children }) => {
     return (
         <div 
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-md animate-fade-in"
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
-                className="bg-[#faf8f5] dark:bg-zinc-950 w-full max-w-md rounded-2xl border-2 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] overflow-hidden animate-in zoom-in-95 duration-200"
+                className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl overflow-hidden animate-slide-up"
             >
-                <div className="flex items-center justify-between p-4 border-b-2 border-black dark:border-white">
-                    <h3 className="font-black text-base text-foreground uppercase tracking-tight">{title}</h3>
-                    <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
-                        <Icon name="x" size={20} />
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                    <h3 className="font-semibold text-sm text-slate-900 dark:text-white tracking-tight">{title}</h3>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <Icon name="x" size={18} />
                     </button>
                 </div>
                 <div className="p-5 max-h-[80vh] overflow-y-auto">{children}</div>
@@ -126,23 +134,101 @@ window.Modal = ({ isOpen, onClose, title, children }) => {
     );
 };
 
-window.ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
+window.Badge = ({ children, variant = "default", className = "" }) => {
+    const variants = {
+        default: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
+        success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/80",
+        warning: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/80",
+        destructive: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/80",
+        primary: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/80"
+    };
+    return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${variants[variant] || variants.default} ${className}`}>
+            {children}
+        </span>
+    );
+};
+
+window.SegmentedControl = ({ tabs = [], activeTab, onChange, className = "" }) => (
+    <div className={`flex p-1 bg-slate-200/70 dark:bg-slate-800/70 rounded-2xl border border-slate-300/40 dark:border-slate-700/50 shadow-xs ${className}`}>
+        {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
+            const activeColor = tab.activeColor || "text-blue-600 dark:text-blue-400";
+            return (
+                <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => onChange(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                        isActive
+                            ? `bg-white dark:bg-slate-900 ${activeColor} shadow-sm`
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                >
+                    {tab.icon && <Icon name={tab.icon} size={15} />}
+                    <span>{tab.label}</span>
+                    {typeof tab.count === 'number' && tab.count > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                            isActive 
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200' 
+                                : 'bg-slate-300/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300'
+                        }`}>
+                            {tab.count}
+                        </span>
+                    )}
+                </button>
+            );
+        })}
+    </div>
+);
+
+window.EmptyState = ({ icon = "folder", title = "No records found", description, actionLabel, onAction, className = "" }) => (
+    <div className={`p-8 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 space-y-3 ${className}`}>
+        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 flex items-center justify-center mx-auto">
+            <Icon name={icon} size={20} />
+        </div>
+        <div className="space-y-1">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">{title}</h4>
+            {description && <p className="text-[11px] text-slate-500 dark:text-slate-400">{description}</p>}
+        </div>
+        {actionLabel && onAction && (
+            <button
+                type="button"
+                onClick={onAction}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+            >
+                <Icon name="plus" size={14} />
+                <span>{actionLabel}</span>
+            </button>
+        )}
+    </div>
+);
+
+window.SkeletonList = ({ count = 4, itemHeight = "h-12", className = "" }) => (
+    <div className={`space-y-2 ${className}`}>
+        {Array.from({ length: count }).map((_, i) => (
+            <div key={i} className={`${itemHeight} rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 skeleton-shimmer`} />
+        ))}
+    </div>
+);
+
+window.ConfirmModal = ({ isOpen, onClose, onConfirm, title = "Confirm", message = "Are you sure?", confirmText = "Delete", cancelText = "Cancel" }) => {
     if (!isOpen) return null;
     return (
         <div 
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-md animate-fade-in"
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
-                className="bg-[#faf8f5] dark:bg-zinc-950 w-full max-w-sm rounded-2xl border-2 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] overflow-hidden animate-in zoom-in-95 duration-200"
+                className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl overflow-hidden animate-slide-up"
             >
                 <div className="p-5 space-y-4">
-                    <h3 className="font-black text-base text-foreground uppercase tracking-tight">{title}</h3>
-                    <p className="text-xs font-semibold text-muted-foreground leading-relaxed">{message}</p>
+                    <h3 className="font-semibold text-sm text-slate-900 dark:text-white tracking-tight">{title}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" size="sm" onClick={onClose}>Batal</Button>
-                        <Button variant="destructive" size="sm" onClick={onConfirm}>Hapus</Button>
+                        <Button variant="outline" size="sm" onClick={onClose}>{cancelText}</Button>
+                        <Button variant="destructive" size="sm" onClick={onConfirm}>{confirmText}</Button>
                     </div>
                 </div>
             </div>
@@ -154,11 +240,11 @@ window.Select = ({ value, onChange, options, className = "", placeholder = "Pili
     <select
         value={value}
         onChange={onChange}
-        className={`flex h-11 w-full items-center justify-between rounded-lg border-2 border-black dark:border-white bg-white text-black font-extrabold px-3.5 py-2 text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        className={`flex h-10 w-full items-center justify-between rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium px-3.5 py-2 text-xs shadow-xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
-        <option value="" disabled className="bg-white text-black font-bold">{placeholder}</option>
+        <option value="" disabled className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium">{placeholder}</option>
         {options.map((opt) => (
-            <option key={opt.value} value={opt.value} className="bg-white text-black font-bold">{opt.label}</option>
+            <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium">{opt.label}</option>
         ))}
     </select>
 );
@@ -310,19 +396,19 @@ class ErrorBoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen bg-[#faf8f5] dark:bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
-                    <div className="w-full max-w-sm p-6 bg-card border-2 border-black dark:border-white rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:shadow-[6px_6px_0px_0px_rgba(255,255,255,1)] space-y-4">
-                        <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/50 border-2 border-black dark:border-white flex items-center justify-center mx-auto text-rose-500 font-black text-xl">
+                <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-full max-w-sm p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-xl space-y-4">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-800/60 flex items-center justify-center mx-auto text-rose-500 font-bold text-xl">
                             ⚠️
                         </div>
-                        <h2 className="text-lg font-black text-foreground">Terjadi Kendala Teknis</h2>
-                        <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
+                        <h2 className="text-base font-bold text-slate-900 dark:text-white">Terjadi Kendala Teknis</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
                             Aplikasi mengalami gangguan tampilan sementara. Silakan segarkan halaman untuk memulihkan.
                         </p>
                         <button
                             type="button"
                             onClick={this.handleReload}
-                            className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-black border-2 border-black dark:border-white font-black rounded-lg text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] active:scale-95 transition-all"
+                            className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-xs shadow-sm active:scale-95 transition-all"
                         >
                             Segarkan Halaman
                         </button>

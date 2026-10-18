@@ -6,7 +6,5 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Sensitive Configuration (API Keys & Credentials)
 config.js
-config.local.js
+.netlify/

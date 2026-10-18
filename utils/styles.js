@@ -1,46 +1,46 @@
 // ============================================
-// STYLES — Reusable Neobrutal CSS Class Constants
+// STYLES — Apple Minimalist UI System Constants
 // ============================================
 
 window.NB = {
-    // Shadow patterns
+    // Subtle, diffused ambient depth (Apple Elevation)
     shadow: {
-        sm: 'shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]',
-        md: 'shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]',
-        lg: 'shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]',
-        xl: 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]',
-        xxl: 'shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]',
-        hero: 'shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]',
+        sm: 'shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3)]',
+        md: 'shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.4)]',
+        lg: 'shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_28px_rgba(0,0,0,0.5)]',
+        xl: 'shadow-[0_16px_36px_rgba(0,0,0,0.08)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)]',
+        xxl: 'shadow-[0_24px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_24px_54px_rgba(0,0,0,0.7)]',
+        hero: 'shadow-[0_20px_40px_-15px_rgba(37,99,235,0.15)] dark:shadow-[0_20px_40px_-15px_rgba(59,130,246,0.25)]',
     },
 
-    // Common border style
-    border: 'border-2 border-black dark:border-white',
-    borderThin: 'border border-black dark:border-white',
+    // Apple Hairline borders
+    border: 'border border-slate-200/80 dark:border-slate-800/80',
+    borderThin: 'border border-slate-200/70 dark:border-slate-800/70',
 
-    // Common avatar / category badge circle
-    avatar: (size = 9) => `w-${size} h-${size} rounded-full border-2 border-black dark:border-white flex items-center justify-center text-black text-xs font-black shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] dark:shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)]`,
+    // Avatar / Category circle
+    avatar: (size = 9) => `w-${size} h-${size} rounded-full border border-slate-200/80 dark:border-slate-800 flex items-center justify-center text-slate-800 dark:text-slate-100 text-xs font-semibold bg-slate-100 dark:bg-slate-800/80`,
 
-    // Chip / pill button styles
+    // Apple Segmented Control / Chip styles
     chip: {
-        base: 'rounded-lg text-xs font-black border-2 border-black dark:border-white transition-all active:scale-95',
-        active: 'bg-indigo-500 text-black',
-        inactive: 'bg-white text-black hover:bg-neutral-100',
+        base: 'rounded-xl text-xs font-medium border border-transparent transition-all duration-200 active:scale-95',
+        active: 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-semibold border-slate-200/60 dark:border-slate-700/60',
+        inactive: 'text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50',
     },
 
-    // Filter dropdown panel
-    filterPanel: 'absolute right-0 mt-2 bg-[#faf8f5]/90 dark:bg-zinc-950/90 backdrop-blur-md border-2 border-black dark:border-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] dark:shadow-[6px_6px_0px_0px_rgba(255,255,255,1)] rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2 space-y-3.5',
+    // Glassy Filter dropdown panel
+    filterPanel: 'absolute right-0 mt-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800 shadow-2xl rounded-2xl p-4 z-50 animate-slide-up space-y-3.5',
 
     // Filter trigger button
-    filterButton: (isActive) => `h-11 px-4 bg-card border-2 border-black dark:border-white rounded-lg font-black text-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:bg-muted active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center gap-2 ${isActive ? 'bg-indigo-500 text-black' : ''}`,
+    filterButton: (isActive) => `h-10 px-3.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl font-medium text-xs text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all flex items-center gap-2 ${isActive ? 'ring-2 ring-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/30' : ''}`,
 
     // Modal card
-    modalCard: 'p-4 rounded-xl border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] bg-card',
+    modalCard: 'p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900',
 
     // Transaction type badge
-    typeBadge: (type) => `text-[9px] px-2 py-0.5 rounded-full border border-black dark:border-white font-black shrink-0 ${type === 'income' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`,
+    typeBadge: (type) => `text-[10px] px-2.5 py-0.5 rounded-full font-medium shrink-0 ${type === 'income' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/40' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/40'}`,
 
     // Amount color
-    amountColor: (type) => type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+    amountColor: (type) => type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100',
 };
 
 /**

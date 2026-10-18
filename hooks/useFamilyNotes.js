@@ -6,44 +6,25 @@ const { useState: _fnUseState, useEffect: _fnUseEffect, useCallback: _fnUseCallb
 
 const FAMILY_NOTES_STORAGE_KEY = 'isza_family_notes_cache';
 
-// Seed sample notes if completely empty for first-time onboarding
-const DEFAULT_SAMPLE_NOTES = [
-    {
-        id: 'sample-1',
-        title: 'Ganti Oli Mesin & Gardan Motor Vario',
-        category: 'Kendaraan',
-        last_date: new Date().toISOString().split('T')[0],
-        next_due_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        cost: 85000,
-        status: 'Selesai',
-        notes: 'Oli SPX2 10W-30 + Oli Gardan di Bengkel Resmi AHASS. KM 12.500.'
-    },
-    {
-        id: 'sample-2',
-        title: 'Servis & Cuci AC Kamar Utama',
-        category: 'Rumah',
-        last_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        next_due_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        cost: 75000,
-        status: 'Selesai',
-        notes: 'Cuci filter dan cek tekanan freon (Tekanan normal 140 psi).'
-    }
-];
-
 window.useFamilyNotes = (user, api, toast) => {
     // 1. Initial State from localStorage (0ms perceived latency)
     const [notes, setNotes] = _fnUseState(() => {
         try {
             const cached = localStorage.getItem(FAMILY_NOTES_STORAGE_KEY);
-            if (cached) {
+            if (cached !== null) {
                 const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                if (Array.isArray(parsed)) return parsed;
             }
         } catch (e) {}
-        return DEFAULT_SAMPLE_NOTES;
+        return [];
     });
 
-    const [isLoading, setIsLoading] = _fnUseState(false);
+    const [isLoading, setIsLoading] = _fnUseState(() => {
+        try {
+            const cached = localStorage.getItem(FAMILY_NOTES_STORAGE_KEY);
+            return !cached;
+        } catch(e) { return true; }
+    });
 
     // 2. Fetch / Sync from Supabase
     const loadNotes = _fnUseCallback(async (silent = false) => {
@@ -53,7 +34,7 @@ window.useFamilyNotes = (user, api, toast) => {
         try {
             if (api && api.getFamilyNotes) {
                 const remoteData = await api.getFamilyNotes(user.id);
-                if (Array.isArray(remoteData) && remoteData.length > 0) {
+                if (Array.isArray(remoteData)) {
                     setNotes(remoteData);
                     localStorage.setItem(FAMILY_NOTES_STORAGE_KEY, JSON.stringify(remoteData));
                 }
@@ -61,13 +42,14 @@ window.useFamilyNotes = (user, api, toast) => {
         } catch (err) {
             console.warn('[useFamilyNotes] Supabase sync notice (using local cache):', err.message);
         } finally {
-            if (!silent) setIsLoading(false);
+            setIsLoading(false);
         }
     }, [user, api]);
 
-    useEffect(() => {
+    _fnUseEffect(() => {
         if (user) {
-            loadNotes(true);
+            const hasCache = notes.length > 0;
+            loadNotes(hasCache);
         }
     }, [user, loadNotes]);
 
@@ -109,10 +91,14 @@ window.useFamilyNotes = (user, api, toast) => {
                     // Update the local placeholder ID with remote ID if returned
                     const synced = updated.map(n => n.id === newId ? remote : n);
                     persistNotes(synced);
+                } else {
+                    console.warn('[addNote] api.addFamilyNote returned null or invalid record');
                 }
             } catch (err) {
-                console.warn('[addNote] Saved locally. Remote error:', err.message);
+                console.error('[addNote] Saved locally. Remote error:', err);
             }
+        } else {
+            console.warn('[addNote] Sync skipped: api.addFamilyNote or user.id missing', { hasApi: !!api?.addFamilyNote, userId: user?.id });
         }
 
         if (toast) toast('Catatan berhasil ditambahkan!', 'success');

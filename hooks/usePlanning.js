@@ -7,40 +7,21 @@ const { useState: _plUseState, useEffect: _plUseEffect, useCallback: _plUseCallb
 window.usePlanning = (user, api, toast, onTransactionAdded) => {
     const [planningList, setPlanningList] = _plUseState(() => {
         try {
-            return JSON.parse(localStorage.getItem('isza_tracker_planning_cache')) || [
-                {
-                    id: 'plan-demo-1',
-                    user_id: user?.id,
-                    title: 'Beli Ban Belakang Tubeless Vario',
-                    type: 'expense',
-                    amount: 320000,
-                    category_id: null,
-                    category_name: 'Transport',
-                    target_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-                    notes: 'Ukuran 90/90-14 FDR Flemino / Maxxis',
-                    is_realized: false,
-                    created_at: new Date().toISOString()
-                },
-                {
-                    id: 'plan-demo-2',
-                    user_id: user?.id,
-                    title: 'Bonus Proyek Website & Maintenance',
-                    type: 'income',
-                    amount: 1500000,
-                    category_id: null,
-                    category_name: 'Gaji',
-                    target_date: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-                    notes: 'Pelunasan termin akhir klien',
-                    is_realized: false,
-                    created_at: new Date().toISOString()
-                }
-            ];
-        } catch(e) {
-            return [];
-        }
+            const cached = localStorage.getItem('isza_tracker_planning_cache');
+            if (cached !== null) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) return parsed;
+            }
+        } catch(e) {}
+        return [];
     });
 
-    const [isLoading, setIsLoading] = _plUseState(false);
+    const [isLoading, setIsLoading] = _plUseState(() => {
+        try {
+            const cached = localStorage.getItem('isza_tracker_planning_cache');
+            return !cached;
+        } catch(e) { return true; }
+    });
 
     // Load data from Supabase with LocalStorage fallback
     const loadPlanning = _plUseCallback(async (silent = false) => {
@@ -58,14 +39,15 @@ window.usePlanning = (user, api, toast, onTransactionAdded) => {
         } catch (err) {
             console.warn('[usePlanning] Fetch remote fallback to cache:', err.message);
         } finally {
-            if (!silent) setIsLoading(false);
+            setIsLoading(false);
         }
     }, [user, api]);
 
     // Save initial load
     _plUseEffect(() => {
         if (user) {
-            loadPlanning(true);
+            const hasCache = planningList.length > 0;
+            loadPlanning(hasCache);
         } else {
             setPlanningList([]);
             localStorage.removeItem('isza_tracker_planning_cache');
@@ -173,18 +155,22 @@ window.usePlanning = (user, api, toast, onTransactionAdded) => {
         try {
             let createdTx = null;
 
-            // 1. Insert transaction into Supabase Transactions DB
-            if (api && api.addTransaction) {
-                createdTx = await api.addTransaction(user.id, {
-                    type: realizedType,
-                    amount: realizedAmount,
-                    category_id: realizedCategory,
-                    date: realizedDate,
-                    note: realizedDescription
-                });
+            // 1. Insert transaction into Supabase Transactions DB if category is provided
+            if (api && api.addTransaction && realizedCategory) {
+                try {
+                    createdTx = await api.addTransaction(user.id, {
+                        type: realizedType,
+                        amount: realizedAmount,
+                        category_id: realizedCategory,
+                        date: realizedDate,
+                        note: realizedDescription
+                    });
+                } catch (txErr) {
+                    console.warn('[usePlanning.realize] addTransaction warning:', txErr.message);
+                }
             }
 
-            // 2. Mark Planning as Realized
+            // 2. Mark Planning as Realized locally
             const updated = planningList.map(item => {
                 if (item.id === plan.id) {
                     return {
@@ -203,15 +189,11 @@ window.usePlanning = (user, api, toast, onTransactionAdded) => {
 
             // 3. Update in Supabase planning table
             if (api && api.updatePlanning) {
-                try {
-                    await api.updatePlanning(plan.id, {
-                        is_realized: true,
-                        realized_at: new Date().toISOString(),
-                        realized_transaction_id: createdTx?.id || null
-                    });
-                } catch (e) {
-                    console.warn('[usePlanning.realize] Supabase plan update deferred:', e.message);
-                }
+                await api.updatePlanning(plan.id, {
+                    is_realized: true,
+                    realized_at: new Date().toISOString(),
+                    realized_transaction_id: createdTx?.id || null
+                });
             }
 
             // 4. Trigger Finance Data reload so balance & transactions update instantly
@@ -220,8 +202,7 @@ window.usePlanning = (user, api, toast, onTransactionAdded) => {
             }
 
             if (toast) {
-                const typeLabel = realizedType === 'income' ? 'Pemasukan' : 'Pengeluaran';
-                toast(`Berhasil direalisasikan ke ${typeLabel}: Rp ${realizedAmount.toLocaleString('id-ID')}`, 'success');
+                toast(`Rencana "${plan.title}" berhasil direalisasikan!`, 'success');
             }
             return true;
         } catch (err) {

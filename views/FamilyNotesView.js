@@ -1,527 +1,699 @@
 // ============================================
-// FAMILY NOTES VIEW — Catatan Keluarga & Maintenance Logbook
+// FAMILY NOTES VIEW — Minimal 2-Card Hub (Maintenance & Planning)
 // ============================================
 
-const { useState: _fnvUseState, useMemo: _fnvUseMemo, useCallback: _fnvUseCallback } = React;
+const { useState: _fnvUseState, useMemo: _fnvUseMemo, useEffect: _fnvUseEffect } = React;
 
-window.FamilyNotesView = React.memo(({ user, familyNotesState, onRefresh }) => {
-    const { notes, isLoading, addNote, updateNote, deleteNote } = familyNotesState;
+window.FamilyNotesView = React.memo(({ 
+    user, 
+    familyNotesState, 
+    planningState,
+    categories = [],
+    onNavigate,
+    setIsInSubpage
+}) => {
+    // Current subview: 'maintenance' | 'planning'
+    const [subview, setSubview] = _fnvUseState('maintenance');
 
-    // Filters
-    const [selectedCategory, setSelectedCategory] = _fnvUseState('all');
-    const [searchQuery, setSearchQuery] = _fnvUseState('');
-    const [statusFilter, setStatusFilter] = _fnvUseState('all');
+    // Keep bottom navbar always accessible
+    _fnvUseEffect(() => {
+        if (typeof setIsInSubpage === 'function') {
+            setIsInSubpage(false);
+        }
+    }, [setIsInSubpage]);
 
-    // Modal state
-    const [isModalOpen, setIsModalOpen] = _fnvUseState(false);
+    // Data shortcuts with loading state
+    const { 
+        notes = [], 
+        isLoading: isNotesLoading = false,
+        addNote, 
+        updateNote, 
+        deleteNote 
+    } = familyNotesState || {};
+
+    const { 
+        planningList: plans = [], 
+        isLoading: isPlansLoading = false,
+        addPlanning: addPlan, 
+        updatePlanning: updatePlan, 
+        deletePlanning: deletePlan, 
+        realizePlanning: realizePlan 
+    } = planningState || {};
+
+    // --- SUBPAGE: MAINTENANCE STATE ---
+    const [maintenanceSearch, setMaintenanceSearch] = _fnvUseState('');
+    const [isNoteModalOpen, setIsNoteModalOpen] = _fnvUseState(false);
     const [editingNote, setEditingNote] = _fnvUseState(null);
-    const [deleteConfirmId, setDeleteConfirmId] = _fnvUseState(null);
-
-    // Form state
-    const [formData, setFormData] = _fnvUseState({
+    const [noteFormData, setNoteFormData] = _fnvUseState({
         title: '',
         category: 'Kendaraan',
         last_date: new Date().toISOString().split('T')[0],
         next_due_date: '',
         cost: '',
-        status: 'Selesai',
         notes: ''
     });
 
-    const CATEGORIES = [
-        { id: 'all', label: 'Semua', icon: 'list', color: 'bg-zinc-500' },
-        { id: 'Kendaraan', label: 'Kendaraan', icon: 'car', color: 'bg-amber-500', tag: '🛵 Kendaraan' },
-        { id: 'Rumah', label: 'Rumah & Properti', icon: 'home', color: 'bg-emerald-500', tag: '🏠 Rumah' },
-        { id: 'Kesehatan', label: 'Kesehatan', icon: 'shield', color: 'bg-rose-500', tag: '🏥 Kesehatan' },
-        { id: 'Dokumen', label: 'Dokumen & Legal', icon: 'fileText', color: 'bg-blue-500', tag: '📄 Dokumen' },
-        { id: 'Lainnya', label: 'Lainnya', icon: 'tag', color: 'bg-purple-500', tag: '📝 Lainnya' },
-    ];
+    // --- SUBPAGE: PLANNING STATE ---
+    const [planningSearch, setPlanningSearch] = _fnvUseState('');
+    const [isPlanModalOpen, setIsPlanModalOpen] = _fnvUseState(false);
+    const [editingPlan, setEditingPlan] = _fnvUseState(null);
+    const [planFormData, setPlanFormData] = _fnvUseState({
+        title: '',
+        type: 'expense',
+        category: '',
+        planned_amount: '',
+        target_date: '',
+        notes: ''
+    });
 
-    // Open Add Modal
-    const handleOpenAdd = () => {
+    // Note Modal Handlers
+    const handleOpenAddNote = () => {
         setEditingNote(null);
-        setFormData({
+        setNoteFormData({
             title: '',
-            category: selectedCategory !== 'all' ? selectedCategory : 'Kendaraan',
+            category: 'Kendaraan',
             last_date: new Date().toISOString().split('T')[0],
             next_due_date: '',
             cost: '',
-            status: 'Selesai',
             notes: ''
         });
-        setIsModalOpen(true);
+        setIsNoteModalOpen(true);
     };
 
-    // Open Edit Modal
-    const handleOpenEdit = (note) => {
-        setEditingNote(note);
-        setFormData({
-            title: note.title || '',
-            category: note.category || 'Kendaraan',
-            last_date: note.last_date ? String(note.last_date).slice(0, 10) : new Date().toISOString().split('T')[0],
-            next_due_date: note.next_due_date ? String(note.next_due_date).slice(0, 10) : '',
-            cost: note.cost ? String(note.cost) : '',
-            status: note.status || 'Selesai',
-            notes: note.notes || ''
+    const handleOpenEditNote = (n) => {
+        setEditingNote(n);
+        setNoteFormData({
+            title: n.title || '',
+            category: n.category || 'Kendaraan',
+            last_date: n.last_date ? String(n.last_date).slice(0, 10) : new Date().toISOString().split('T')[0],
+            next_due_date: n.next_due_date ? String(n.next_due_date).slice(0, 10) : '',
+            cost: n.cost ? String(n.cost) : '',
+            notes: n.notes || ''
         });
-        setIsModalOpen(true);
+        setIsNoteModalOpen(true);
     };
 
-    // Handle Submit
-    const handleSubmit = async (e) => {
+    const handleSubmitNote = async (e) => {
         e.preventDefault();
-        if (!formData.title.trim()) return;
-
+        if (!noteFormData.title.trim()) return;
+        const payload = {
+            title: noteFormData.title.trim(),
+            category: noteFormData.category || 'Kendaraan',
+            last_date: noteFormData.last_date || new Date().toISOString().split('T')[0],
+            next_due_date: noteFormData.next_due_date || null,
+            cost: parseFloat(noteFormData.cost || 0),
+            notes: noteFormData.notes || ''
+        };
         if (editingNote) {
-            await updateNote(editingNote.id, formData);
+            await updateNote(editingNote.id, payload);
         } else {
-            await addNote(formData);
+            await addNote(payload);
         }
-        setIsModalOpen(false);
+        setIsNoteModalOpen(false);
         setEditingNote(null);
     };
 
-    // Filtered Notes
-    const filteredNotes = _fnvUseMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-
-        return (notes || []).filter(note => {
-            // Category filter
-            if (selectedCategory !== 'all' && note.category !== selectedCategory) {
-                return false;
-            }
-
-            // Status filter
-            if (statusFilter === 'due_soon') {
-                if (!note.next_due_date) return false;
-                const today = new Date();
-                const due = new Date(note.next_due_date);
-                const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-                if (diffDays > 30) return false;
-            } else if (statusFilter === 'completed') {
-                if (note.status !== 'Selesai') return false;
-            }
-
-            // Search query
-            if (query) {
-                const titleMatch = (note.title || '').toLowerCase().includes(query);
-                const notesMatch = (note.notes || '').toLowerCase().includes(query);
-                const catMatch = (note.category || '').toLowerCase().includes(query);
-                return titleMatch || notesMatch || catMatch;
-            }
-
-            return true;
-        }).sort((a, b) => {
-            // Urutkan berdasarkan tanggal reminder terdekat atau last_date terbaru
-            const dateA = a.next_due_date || a.last_date || '';
-            const dateB = b.next_due_date || b.last_date || '';
-            return dateB.localeCompare(dateA);
+    // Plan Modal Handlers
+    const handleOpenAddPlan = () => {
+        setEditingPlan(null);
+        const matchingCats = categories.filter(c => c.type === 'expense');
+        const defaultCat = matchingCats.length > 0 ? matchingCats[0] : (categories[0] || null);
+        setPlanFormData({
+            title: '',
+            type: 'expense',
+            category_id: defaultCat ? defaultCat.id : '',
+            category: defaultCat ? defaultCat.name : '',
+            planned_amount: '',
+            target_date: new Date().toISOString().split('T')[0],
+            notes: ''
         });
-    }, [notes, selectedCategory, statusFilter, searchQuery]);
-
-    // Summary Stats
-    const stats = _fnvUseMemo(() => {
-        const total = (notes || []).length;
-        const totalCost = (notes || []).reduce((sum, n) => sum + (parseFloat(n.cost) || 0), 0);
-        
-        const today = new Date();
-        const upcomingDue = (notes || []).filter(n => {
-            if (!n.next_due_date) return false;
-            const due = new Date(n.next_due_date);
-            const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-            return diffDays <= 30 && diffDays >= -15; // 30 hari ke depan atau lewat s/d 15 hari
-        }).length;
-
-        return { total, totalCost, upcomingDue };
-    }, [notes]);
-
-    // Due Date Helper
-    const getDueBadge = (dueDateStr) => {
-        if (!dueDateStr) return null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const due = new Date(dueDateStr);
-        due.setHours(0, 0, 0, 0);
-
-        const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-            return (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                    <Icon name="alertCircle" size={12} />
-                    Lewat {Math.abs(diffDays)} hari
-                </span>
-            );
-        } else if (diffDays === 0) {
-            return (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse">
-                    <Icon name="clock" size={12} />
-                    Jatuh Tempo Hari Ini
-                </span>
-            );
-        } else if (diffDays <= 14) {
-            return (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    <Icon name="clock" size={12} />
-                    {diffDays} hari lagi
-                </span>
-            );
-        } else {
-            return (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
-                    <Icon name="calendar" size={12} />
-                    {diffDays} hari lagi
-                </span>
-            );
-        }
+        setIsPlanModalOpen(true);
     };
 
-    return (
-        <div className="space-y-4 max-w-4xl mx-auto pb-12">
-            {/* Header Title & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight flex items-center gap-2">
-                        <span className="p-1.5 rounded-xl bg-indigo-500 text-black border-2 border-black dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                            <Icon name="fileText" size={18} />
-                        </span>
-                        Catatan Keluarga
-                    </h2>
-                    <p className="text-xs text-muted-foreground font-bold mt-0.5">
-                        Logbook servis kendaraan, perawatan rumah & agenda keluarga.
-                    </p>
-                </div>
+    const handleOpenEditPlan = (p) => {
+        setEditingPlan(p);
+        const matchingCats = categories.filter(c => c.type === (p.type || 'expense'));
+        const defaultCat = matchingCats.length > 0 ? matchingCats[0] : (categories[0] || null);
+        setPlanFormData({
+            title: p.title || '',
+            type: p.type || 'expense',
+            category_id: p.category_id || (defaultCat ? defaultCat.id : ''),
+            category: p.category || (defaultCat ? defaultCat.name : ''),
+            planned_amount: (p.amount !== undefined ? p.amount : p.planned_amount) ? String(p.amount || p.planned_amount) : '',
+            target_date: p.target_date ? String(p.target_date).slice(0, 10) : '',
+            notes: p.notes || ''
+        });
+        setIsPlanModalOpen(true);
+    };
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+    const handleSubmitPlan = async (e) => {
+        e.preventDefault();
+        if (!planFormData.title.trim()) return;
+        const payload = {
+            title: planFormData.title.trim(),
+            type: planFormData.type || 'expense',
+            category_id: planFormData.category_id || null,
+            target_date: planFormData.target_date || new Date().toISOString().split('T')[0],
+            notes: planFormData.notes || '',
+            amount: parseFloat(planFormData.planned_amount || 0)
+        };
+        if (editingPlan) {
+            await updatePlan(editingPlan.id, payload);
+        } else {
+            await addPlan(payload);
+        }
+        setIsPlanModalOpen(false);
+        setEditingPlan(null);
+    };
+
+    // Filtered lists
+    const filteredNotes = _fnvUseMemo(() => {
+        const q = maintenanceSearch.trim().toLowerCase();
+        if (!q) return notes || [];
+        return (notes || []).filter(n => (n.title || '').toLowerCase().includes(q));
+    }, [notes, maintenanceSearch]);
+
+    const filteredPlans = _fnvUseMemo(() => {
+        const q = planningSearch.trim().toLowerCase();
+        if (!q) return plans || [];
+        return (plans || []).filter(p => (p.title || '').toLowerCase().includes(q));
+    }, [plans, planningSearch]);
+
+    // Pagination constants & state
+    const ITEMS_PER_PAGE = 8;
+    const [notePage, setNotePage] = _fnvUseState(1);
+    const [planPage, setPlanPage] = _fnvUseState(1);
+
+    // Reset pagination when searching
+    _fnvUseEffect(() => {
+        setNotePage(1);
+    }, [maintenanceSearch]);
+
+    _fnvUseEffect(() => {
+        setPlanPage(1);
+    }, [planningSearch]);
+
+    // Note pagination calculation
+    const totalNotePages = Math.max(1, Math.ceil(filteredNotes.length / ITEMS_PER_PAGE));
+    const safeNotePage = Math.min(Math.max(1, notePage), totalNotePages);
+    const paginatedNotes = filteredNotes.slice((safeNotePage - 1) * ITEMS_PER_PAGE, safeNotePage * ITEMS_PER_PAGE);
+
+    // Plan pagination calculation
+    const totalPlanPages = Math.max(1, Math.ceil(filteredPlans.length / ITEMS_PER_PAGE));
+    const safePlanPage = Math.min(Math.max(1, planPage), totalPlanPages);
+    const paginatedPlans = filteredPlans.slice((safePlanPage - 1) * ITEMS_PER_PAGE, safePlanPage * ITEMS_PER_PAGE);
+
+    const TABS = _fnvUseMemo(() => [
+        { id: 'maintenance', label: 'Maintenance', icon: 'wrench', count: notes.length, activeColor: 'text-blue-600 dark:text-blue-400' },
+        { id: 'planning', label: 'Planning', icon: 'calendar', count: plans.length, activeColor: 'text-emerald-600 dark:text-emerald-400' }
+    ], [notes.length, plans.length]);
+
+    // ============================================
+    // 1. MAINTENANCE VIEW
+    // ============================================
+    if (subview === 'maintenance') {
+        return (
+            <div className="space-y-4 max-w-xl mx-auto pt-2 pb-16 min-h-[85vh]">
+                {/* Reusable Segmented Tabs */}
+                <SegmentedControl tabs={TABS} activeTab={subview} onChange={setSubview} />
+
+                {/* Maintenance Header Bar */}
+                <div className="flex items-center justify-between pb-1">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                            Maintenance
+                        </h2>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Logbook and service tracking
+                        </p>
+                    </div>
                     <button
                         type="button"
-                        onClick={handleOpenAdd}
-                        className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-black font-black text-xs transition-all active:scale-95 ${NB.shadow.sm} ${NB.border}`}
+                        onClick={handleOpenAddNote}
+                        className="h-8 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all active:scale-95 shadow-xs flex items-center gap-1.5"
                     >
-                        <Icon name="plus" size={15} />
-                        <span>Tambah Catatan</span>
+                        <Icon name="plus" size={14} />
+                        <span>Add</span>
                     </button>
                 </div>
-            </div>
 
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-3 gap-2.5">
-                <div className="p-3 rounded-xl border-2 border-black dark:border-zinc-800 bg-card dark:bg-[#18181b] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none">
-                    <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] font-extrabold uppercase tracking-wider">
-                        <Icon name="fileText" size={13} className="text-indigo-500" />
-                        <span>Total Catatan</span>
-                    </div>
-                    <p className="text-lg font-black text-foreground mt-0.5">{stats.total}</p>
-                </div>
-
-                <div className="p-3 rounded-xl border-2 border-black dark:border-zinc-800 bg-card dark:bg-[#18181b] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none">
-                    <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold uppercase tracking-wider">
-                        <Icon name="clock" size={13} />
-                        <span>Jadwal Dekat</span>
-                    </div>
-                    <p className="text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5">{stats.upcomingDue} Jadwal</p>
-                </div>
-
-                <div className="p-3 rounded-xl border-2 border-black dark:border-zinc-800 bg-card dark:bg-[#18181b] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none">
-                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-extrabold uppercase tracking-wider">
-                        <Icon name="wallet" size={13} />
-                        <span>Total Biaya</span>
-                    </div>
-                    <p className="text-xs sm:text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
-                        {formatCurrency(stats.totalCost)}
-                    </p>
-                </div>
-            </div>
-
-            {/* Search & Category Filter Pills */}
-            <div className="space-y-2.5">
                 {/* Search Bar */}
                 <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
-                        <Icon name="search" size={15} />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Icon name="search" size={14} />
                     </div>
                     <input
                         type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Cari catatan (cth: ganti oli, AC, Vario)..."
-                        className="w-full pl-9 pr-8 py-2 text-xs font-bold rounded-xl bg-card border-2 border-black dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none placeholder:text-muted-foreground text-foreground transition-all"
+                        value={maintenanceSearch}
+                        onChange={(e) => setMaintenanceSearch(e.target.value)}
+                        placeholder="Search records..."
+                        className="w-full pl-9 pr-3 py-2 text-xs font-medium rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-white placeholder:text-slate-400 shadow-xs"
                     />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
-                        >
-                            <Icon name="x" size={14} />
-                        </button>
+                </div>
+
+                {/* Ultra-Clean Title-Only List */}
+                <div className="space-y-2">
+                    {isNotesLoading && notes.length === 0 ? (
+                        <SkeletonList count={4} />
+                    ) : filteredNotes.length === 0 ? (
+                        <EmptyState 
+                            icon="wrench" 
+                            title="No maintenance records" 
+                            description="Track vehicle services and home maintenance."
+                            actionLabel="Add Record"
+                            onAction={handleOpenAddNote}
+                        />
+                    ) : (
+                        paginatedNotes.map(n => (
+                            <div
+                                key={n.id}
+                                onClick={() => handleOpenEditNote(n)}
+                                className="px-4 py-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.99] shadow-xs group"
+                            >
+                                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                                    {n.title}
+                                </span>
+                                <Icon name="chevronRight" size={16} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                            </div>
+                        ))
                     )}
                 </div>
 
-                {/* Category Horizontal Scroll */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
-                    {CATEGORIES.map(cat => {
-                        const isSelected = selectedCategory === cat.id;
-                        return (
+                {/* Maintenance Pagination Bar */}
+                {filteredNotes.length > ITEMS_PER_PAGE && (
+                    <div className="flex items-center justify-between pt-2 px-1 text-xs">
+                        <span className="text-slate-400 font-medium">
+                            Page <span className="text-slate-800 dark:text-slate-200 font-bold">{safeNotePage}</span> of {totalNotePages} ({filteredNotes.length} records)
+                        </span>
+                        <div className="flex items-center gap-1.5">
                             <button
-                                key={cat.id}
                                 type="button"
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-black shrink-0 transition-all border-2 border-black dark:border-zinc-800 flex items-center gap-1.5 active:scale-95 ${
-                                    isSelected
-                                        ? `bg-indigo-500 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-none`
-                                        : 'bg-card text-foreground hover:bg-muted/80'
-                                }`}
+                                onClick={() => setNotePage(p => Math.max(1, p - 1))}
+                                disabled={safeNotePage === 1}
+                                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
                             >
-                                <Icon name={cat.icon} size={13} />
-                                <span>{cat.label}</span>
+                                Prev
                             </button>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Notes List Cards */}
-            <div className="space-y-3">
-                {filteredNotes.length === 0 ? (
-                    <div className="p-8 text-center rounded-2xl border-2 border-dashed border-border bg-card/50 space-y-3">
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
-                            <Icon name="fileText" size={24} />
-                        </div>
-                        <div className="space-y-1">
-                            <h4 className="text-sm font-black text-foreground">Belum ada catatan</h4>
-                            <p className="text-xs text-muted-foreground font-bold max-w-sm mx-auto">
-                                Mulai catat perawatan motor, mobil, servis AC, atau agenda penting keluarga agar mudah dilacak.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleOpenAdd}
-                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-500 text-black font-black text-xs ${NB.border} ${NB.shadow.sm}`}
-                        >
-                            <Icon name="plus" size={14} />
-                            <span>Buat Catatan Pertama</span>
-                        </button>
-                    </div>
-                ) : (
-                    filteredNotes.map(note => {
-                        const catConfig = CATEGORIES.find(c => c.id === note.category) || CATEGORIES[1];
-                        return (
-                            <div
-                                key={note.id}
-                                className="p-4 rounded-xl border-2 border-black dark:border-zinc-800 bg-card dark:bg-[#18181b] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-none space-y-3 transition-all hover:translate-x-[-1px] hover:translate-y-[-1px]"
+                            <button
+                                type="button"
+                                onClick={() => setNotePage(p => Math.min(totalNotePages, p + 1))}
+                                disabled={safeNotePage === totalNotePages}
+                                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
                             >
-                                {/* Top Header of Card */}
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="space-y-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-muted border border-border text-foreground">
-                                                {catConfig.tag || note.category}
-                                            </span>
-                                            {getDueBadge(note.next_due_date)}
-                                        </div>
-                                        <h3 className="font-extrabold text-sm sm:text-base text-foreground leading-snug break-words">
-                                            {note.title}
-                                        </h3>
-                                    </div>
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
 
-                                    {/* Action Dropdown / Buttons */}
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenEdit(note)}
-                                            className="p-1.5 rounded-lg border border-border hover:bg-muted text-foreground transition-all"
-                                            title="Edit Catatan"
-                                        >
-                                            <Icon name="edit" size={14} />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setDeleteConfirmId(note.id)}
-                                            className="p-1.5 rounded-lg border border-border hover:bg-rose-500/10 text-rose-500 transition-all"
-                                            title="Hapus Catatan"
-                                        >
-                                            <Icon name="trash" size={14} />
-                                        </button>
-                                    </div>
-                                </div>
+                {/* Manage / Edit Note Modal */}
+                <Modal
+                    isOpen={isNoteModalOpen}
+                    onClose={() => setIsNoteModalOpen(false)}
+                    title={editingNote ? 'Manage Maintenance' : 'New Maintenance'}
+                >
+                    <form onSubmit={handleSubmitNote} className="space-y-3.5">
+                        <div className="space-y-1">
+                            <Label htmlFor="m-title">Title *</Label>
+                            <Input
+                                id="m-title"
+                                type="text"
+                                required
+                                placeholder="e.g. Oil Change, AC Service"
+                                value={noteFormData.title}
+                                onChange={(e) => setNoteFormData({ ...noteFormData, title: e.target.value })}
+                            />
+                        </div>
 
-                                {/* Description / Detail */}
-                                {note.notes && (
-                                    <p className="text-xs text-muted-foreground font-semibold leading-relaxed bg-muted/30 dark:bg-zinc-900/40 p-2.5 rounded-lg border border-border/40">
-                                        {note.notes}
-                                    </p>
-                                )}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="m-cat">Category</Label>
+                                <select
+                                    id="m-cat"
+                                    value={noteFormData.category}
+                                    onChange={(e) => setNoteFormData({ ...noteFormData, category: e.target.value })}
+                                    className="w-full h-10 px-3 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                >
+                                    <option value="Kendaraan">Kendaraan</option>
+                                    <option value="Rumah">Rumah</option>
+                                    <option value="Kesehatan">Kesehatan</option>
+                                    <option value="Dokumen">Dokumen</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="m-cost">Cost</Label>
+                                <Input
+                                    id="m-cost"
+                                    type="number"
+                                    placeholder="0"
+                                    value={noteFormData.cost}
+                                    onChange={(e) => setNoteFormData({ ...noteFormData, cost: e.target.value })}
+                                />
+                            </div>
+                        </div>
 
-                                {/* Card Footer Stats (Dates & Cost) */}
-                                <div className="pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-3 text-muted-foreground font-bold text-[11px]">
-                                        <span className="flex items-center gap-1">
-                                            <Icon name="calendarCheck" size={13} className="text-indigo-500" />
-                                            Terakhir: {formatDate(note.last_date)}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="m-last">Last Date</Label>
+                                <Input
+                                    id="m-last"
+                                    type="date"
+                                    value={noteFormData.last_date}
+                                    onChange={(e) => setNoteFormData({ ...noteFormData, last_date: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="m-due">Next Due</Label>
+                                <Input
+                                    id="m-due"
+                                    type="date"
+                                    value={noteFormData.next_due_date}
+                                    onChange={(e) => setNoteFormData({ ...noteFormData, next_due_date: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label htmlFor="m-notes">Description</Label>
+                            <textarea
+                                id="m-notes"
+                                rows={2}
+                                placeholder="Notes..."
+                                value={noteFormData.notes}
+                                onChange={(e) => setNoteFormData({ ...noteFormData, notes: e.target.value })}
+                                className="w-full p-2.5 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                            {editingNote ? (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (window.confirm('Delete this item?')) {
+                                            await deleteNote(editingNote.id);
+                                            setIsNoteModalOpen(false);
+                                        }
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
+                                >
+                                    Delete
+                                </button>
+                            ) : <div />}
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsNoteModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    Save
+                                </Button>
+                            </div>
+                        </div>
+                    </form>
+                </Modal>
+            </div>
+        );
+    }
+
+    // ============================================
+    // 2. PLANNING VIEW
+    // ============================================
+    if (subview === 'planning') {
+        return (
+            <div className="space-y-4 max-w-xl mx-auto pt-2 pb-16 min-h-[85vh]">
+                {/* Reusable Segmented Tabs */}
+                <SegmentedControl tabs={TABS} activeTab={subview} onChange={setSubview} />
+
+                {/* Planning Header Bar */}
+                <div className="flex items-center justify-between pb-1">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                            Planning
+                        </h2>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Financial targets and budget plans
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleOpenAddPlan}
+                        className="h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all active:scale-95 shadow-xs flex items-center gap-1.5"
+                    >
+                        <Icon name="plus" size={14} />
+                        <span>Add</span>
+                    </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Icon name="search" size={14} />
+                    </div>
+                    <input
+                        type="text"
+                        value={planningSearch}
+                        onChange={(e) => setPlanningSearch(e.target.value)}
+                        placeholder="Search plans..."
+                        className="w-full pl-9 pr-3 py-2 text-xs font-medium rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-slate-900 dark:text-white placeholder:text-slate-400 shadow-xs"
+                    />
+                </div>
+
+                {/* Ultra-Clean Title-Only List */}
+                <div className="space-y-2">
+                    {isPlansLoading && plans.length === 0 ? (
+                        <SkeletonList count={4} />
+                    ) : filteredPlans.length === 0 ? (
+                        <EmptyState 
+                            icon="calendar" 
+                            title="No planned items" 
+                            description="Plan upcoming family expenses and milestones."
+                            actionLabel="Add Plan"
+                            onAction={handleOpenAddPlan}
+                        />
+                    ) : (
+                        paginatedPlans.map(p => (
+                            <div
+                                key={p.id}
+                                onClick={() => handleOpenEditPlan(p)}
+                                className="px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.99] shadow-xs group"
+                            >
+                                <div className="flex items-center gap-2.5 truncate min-w-0">
+                                    {p.is_realized ? (
+                                        <span className="px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 rounded-md shrink-0 flex items-center gap-1">
+                                            <Icon name="check" size={10} />
+                                            <span>Realized</span>
                                         </span>
-                                        {note.next_due_date && (
-                                            <span className="flex items-center gap-1">
-                                                <Icon name="clock" size={13} className="text-amber-500" />
-                                                Berikutnya: {formatDate(note.next_due_date)}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {note.cost > 0 && (
-                                        <span className="font-black text-xs text-foreground px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                            Biaya: {formatCurrency(note.cost)}
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            title="Click to Realize"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                realizePlan(p);
+                                            }}
+                                            className="px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/80 rounded-lg hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-all shrink-0 flex items-center gap-1 shadow-xs active:scale-95"
+                                        >
+                                            <Icon name="check" size={11} />
+                                            <span>Realize</span>
+                                        </button>
+                                    )}
+                                    <span className={`text-sm font-semibold truncate ${p.is_realized ? 'text-slate-400 line-through' : 'text-slate-900 dark:text-slate-100'}`}>
+                                        {p.title}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {p.amount > 0 && (
+                                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                            Rp {Number(p.amount).toLocaleString('id-ID')}
                                         </span>
                                     )}
+                                    <Icon name="chevronRight" size={16} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 shrink-0 transition-transform group-hover:translate-x-0.5" />
                                 </div>
                             </div>
-                        );
-                    })
-                )}
-            </div>
-
-            {/* Modal: Tambah / Edit Catatan */}
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={editingNote ? 'Edit Catatan Keluarga' : 'Tambah Catatan Keluarga Baru'}
-            >
-                <form onSubmit={handleSubmit} className="space-y-3.5">
-                    {/* Judul */}
-                    <div className="space-y-1">
-                        <Label htmlFor="note-title">Judul / Kegiatan *</Label>
-                        <Input
-                            id="note-title"
-                            type="text"
-                            required
-                            placeholder="Cth: Ganti Oli Mesin Vario 160, Cuci AC Kamar"
-                            value={formData.title}
-                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        />
-                    </div>
-
-                    {/* Kategori & Biaya */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <Label htmlFor="note-category">Kategori</Label>
-                            <select
-                                id="note-category"
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full h-11 px-3.5 text-xs font-black rounded-lg border-2 border-black dark:border-zinc-800 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="Kendaraan">🛵 Kendaraan (Motor / Mobil)</option>
-                                <option value="Rumah">🏠 Rumah & Elektronik</option>
-                                <option value="Kesehatan">🏥 Kesehatan & Medis</option>
-                                <option value="Dokumen">📄 Dokumen & Tagihan</option>
-                                <option value="Lainnya">📝 Lainnya</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="note-cost">Biaya Pengeluaran (Rp)</Label>
-                            <Input
-                                id="note-cost"
-                                type="number"
-                                min="0"
-                                placeholder="Cth: 85000"
-                                value={formData.cost}
-                                onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Tanggal Terakhir & Jadwal Berikutnya */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <Label htmlFor="note-last-date">Tanggal Dilakukan *</Label>
-                            <Input
-                                id="note-last-date"
-                                type="date"
-                                required
-                                value={formData.last_date}
-                                onChange={(e) => setFormData({ ...formData, last_date: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="note-due-date">Jadwal Berikutnya (Opsional)</Label>
-                            <Input
-                                id="note-due-date"
-                                type="date"
-                                value={formData.next_due_date}
-                                onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Catatan / Keterangan */}
-                    <div className="space-y-1">
-                        <Label htmlFor="note-desc">Keterangan / Detail Servis</Label>
-                        <textarea
-                            id="note-desc"
-                            rows={3}
-                            placeholder="Cth: Oli SPX2 10W-30, ganti di KM 15.000, bengkel AHASS Tambun..."
-                            value={formData.notes}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full p-3 text-xs font-bold rounded-lg border-2 border-black dark:border-zinc-800 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-muted-foreground"
-                        />
-                    </div>
-
-                    {/* Modal Buttons */}
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsModalOpen(false)}
-                        >
-                            Batal
-                        </Button>
-                        <Button
-                            type="submit"
-                            variant="default"
-                            size="sm"
-                        >
-                            {editingNote ? 'Simpan Perubahan' : 'Tambah Catatan'}
-                        </Button>
-                    </div>
-                </form>
-            </Modal>
-
-            {/* Modal Konfirmasi Hapus */}
-            <Modal
-                isOpen={!!deleteConfirmId}
-                onClose={() => setDeleteConfirmId(null)}
-                title="Hapus Catatan?"
-            >
-                <div className="space-y-4">
-                    <p className="text-xs font-bold text-muted-foreground">
-                        Apakah kamu yakin ingin menghapus catatan ini? Tindakan ini tidak dapat dibatalkan.
-                    </p>
-                    <div className="flex items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteConfirmId(null)}
-                        >
-                            Batal
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                                deleteNote(deleteConfirmId);
-                                setDeleteConfirmId(null);
-                            }}
-                        >
-                            Hapus
-                        </Button>
-                    </div>
+                        ))
+                    )}
                 </div>
-            </Modal>
-        </div>
-    );
+
+                {/* Planning Pagination Bar */}
+                {filteredPlans.length > ITEMS_PER_PAGE && (
+                    <div className="flex items-center justify-between pt-2 px-1 text-xs">
+                        <span className="text-slate-400 font-medium">
+                            Page <span className="text-slate-800 dark:text-slate-200 font-bold">{safePlanPage}</span> of {totalPlanPages} ({filteredPlans.length} plans)
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setPlanPage(p => Math.max(1, p - 1))}
+                                disabled={safePlanPage === 1}
+                                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
+                            >
+                                Prev
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPlanPage(p => Math.min(totalPlanPages, p + 1))}
+                                disabled={safePlanPage === totalPlanPages}
+                                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Manage / Edit Plan Modal */}
+                <Modal
+                    isOpen={isPlanModalOpen}
+                    onClose={() => setIsPlanModalOpen(false)}
+                    title={editingPlan ? 'Manage Plan' : 'New Plan'}
+                >
+                    <form onSubmit={handleSubmitPlan} className="space-y-3.5">
+                        <div className="space-y-1">
+                            <Label htmlFor="p-title">Title *</Label>
+                            <Input
+                                id="p-title"
+                                type="text"
+                                required
+                                placeholder="e.g. Vacation, Tax"
+                                value={planFormData.title}
+                                onChange={(e) => setPlanFormData({ ...planFormData, title: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="p-type">Type</Label>
+                                <select
+                                    id="p-type"
+                                    value={planFormData.type}
+                                    onChange={(e) => setPlanFormData({ ...planFormData, type: e.target.value })}
+                                    className="w-full h-10 px-3 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                >
+                                    <option value="expense">Expense</option>
+                                    <option value="income">Income</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="p-amount">Planned Amount</Label>
+                                <Input
+                                    id="p-amount"
+                                    type="number"
+                                    placeholder="0"
+                                    value={planFormData.planned_amount}
+                                    onChange={(e) => setPlanFormData({ ...planFormData, planned_amount: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="p-cat">Category</Label>
+                                <select
+                                    id="p-cat"
+                                    value={planFormData.category_id}
+                                    onChange={(e) => {
+                                        const cat = categories.find(c => c.id === e.target.value);
+                                        setPlanFormData({ 
+                                            ...planFormData, 
+                                            category_id: e.target.value,
+                                            category: cat ? cat.name : ''
+                                        });
+                                    }}
+                                    className="w-full h-10 px-3 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                >
+                                    <option value="">-- Select Category --</option>
+                                    {categories.filter(c => c.type === planFormData.type).map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="p-target">Target Date</Label>
+                                <Input
+                                    id="p-target"
+                                    type="date"
+                                    value={planFormData.target_date}
+                                    onChange={(e) => setPlanFormData({ ...planFormData, target_date: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label htmlFor="p-notes">Description</Label>
+                            <textarea
+                                id="p-notes"
+                                rows={2}
+                                placeholder="Notes..."
+                                value={planFormData.notes}
+                                onChange={(e) => setPlanFormData({ ...planFormData, notes: e.target.value })}
+                                className="w-full p-2.5 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                            {editingPlan ? (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (window.confirm('Delete this plan?')) {
+                                                await deletePlan(editingPlan.id);
+                                                setIsPlanModalOpen(false);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
+                                    >
+                                        Delete
+                                    </button>
+                                    {typeof realizePlan === 'function' && (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                await realizePlan(editingPlan);
+                                                setIsPlanModalOpen(false);
+                                            }}
+                                            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all"
+                                        >
+                                            Realize
+                                        </button>
+                                    )}
+                                </div>
+                            ) : <div />}
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsPlanModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                    Save
+                                </Button>
+                            </div>
+                        </div>
+                    </form>
+                </Modal>
+            </div>
+        );
+    }
+
+    return null;
 });

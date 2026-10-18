@@ -8,6 +8,7 @@ window.DashboardView = React.memo(({
     user,
     transactions = [],
     categories = [],
+    isLoading = false,
     dashboardSettings = { period: '1_month', customStartDate: '', customEndDate: '', categoryId: 'all', sort: 'highest' },
     familyNotesState,
     planningState,
@@ -63,10 +64,24 @@ window.DashboardView = React.memo(({
         const period = dashboardSettings?.period || '1_month';
 
         if (period === '1_month' || period === 'this_month') {
-            start = new Date(now.getFullYear(), now.getMonth(), 1);
-            end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            const currentDay = now.getDate();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-            label = `1 Bulan (${monthNames[now.getMonth()]} ${now.getFullYear()})`;
+
+            if (currentDay >= 25) {
+                // If today is 25th or later: period is 25th of this month to 24th of next month
+                start = new Date(currentYear, currentMonth, 25, 0, 0, 0, 0);
+                end = new Date(currentYear, currentMonth + 1, 24, 23, 59, 59, 999);
+                const nextMonth = (currentMonth + 1) % 12;
+                label = `Bulan Ini (25 ${monthNames[currentMonth]} - 24 ${monthNames[nextMonth]})`;
+            } else {
+                // If today is before 25th: period is 25th of last month to 24th of this month
+                start = new Date(currentYear, currentMonth - 1, 25, 0, 0, 0, 0);
+                end = new Date(currentYear, currentMonth, 24, 23, 59, 59, 999);
+                const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+                label = `Bulan Ini (25 ${monthNames[prevMonth]} - 24 ${monthNames[currentMonth]})`;
+            }
         } else if (period === 'custom') {
             if (dashboardSettings.customStartDate) {
                 start = new Date(dashboardSettings.customStartDate);
@@ -114,17 +129,18 @@ window.DashboardView = React.memo(({
         const periodIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
         const periodExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
 
-        // Today's Expense
-        const todayStr = new Date().toISOString().split('T')[0];
+        // Today's Expense (use local date, not UTC)
+        const now2 = new Date();
+        const todayStr = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}-${String(now2.getDate()).padStart(2, '0')}`;
         const todayExpense = transactions
-            .filter(t => t.type === 'expense' && t.date === todayStr)
+            .filter(t => t.type === 'expense' && (t.date || '').slice(0, 10) === todayStr)
             .reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
 
         return { totalBalance, periodIncome, periodExpense, todayExpense };
     }, [transactions, filteredTransactions]);
 
-    // 3. Category Breakdown (Expense)
-    const { sortedCategories } = _dvUseMemo(() => {
+    // 3. Category Breakdown (Expense) & Pareto Monthly Analysis
+    const { sortedCategories, monthlyPareto } = _dvUseMemo(() => {
         const breakdown = {};
         const expenseTxs = filteredTransactions.filter(t => t.type === 'expense');
 
@@ -153,8 +169,52 @@ window.DashboardView = React.memo(({
             list.sort((a, b) => b.amount - a.amount);
         }
 
-        return { sortedCategories: list };
-    }, [filteredTransactions, dashboardSettings?.sort]);
+        // --- Pareto Monthly Trend (Income vs Expense grouped by 25th-to-24th cycle) ---
+        const monthlyMap = {};
+        const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+        transactions.forEach(t => {
+            if (!t.date) return;
+            const d = new Date(t.date);
+            if (isNaN(d.getTime())) return;
+
+            // Cutoff cycle: if date >= 25, it belongs to the NEXT month's budget cycle
+            let cycleYear = d.getFullYear();
+            let cycleMonth = d.getMonth(); // 0-indexed
+
+            const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+            let label = '';
+            if (d.getDate() >= 25) {
+                cycleMonth += 1;
+                if (cycleMonth > 11) {
+                    cycleMonth = 0;
+                    cycleYear += 1;
+                }
+                label = `25 ${monthNamesShort[d.getMonth()]} - 24 ${monthNamesShort[cycleMonth]}`;
+            } else {
+                const prevM = d.getMonth() === 0 ? 11 : d.getMonth() - 1;
+                label = `25 ${monthNamesShort[prevM]} - 24 ${monthNamesShort[d.getMonth()]}`;
+            }
+
+            const key = `${cycleYear}-${String(cycleMonth + 1).padStart(2, '0')}`;
+            
+            if (!monthlyMap[key]) {
+                monthlyMap[key] = { key, label, income: 0, expense: 0 };
+            }
+            const amt = parseFloat(t.amount) || 0;
+            if (t.type === 'income') {
+                monthlyMap[key].income += amt;
+            } else if (t.type === 'expense') {
+                monthlyMap[key].expense += amt;
+            }
+        });
+
+        const sortedMonthlyKeys = Object.keys(monthlyMap).sort().slice(-6); // last 6 cycles
+        const paretoData = sortedMonthlyKeys.map(k => monthlyMap[k]);
+
+        return { sortedCategories: list, monthlyPareto: paretoData };
+    }, [transactions, filteredTransactions, dashboardSettings?.sort]);
 
     // 4. Chart Render
     _dvUseEffect(() => {
@@ -318,27 +378,70 @@ window.DashboardView = React.memo(({
         return plansList.filter(p => !p.is_realized).slice(0, 4);
     }, [plansList]);
 
+    // In-App Skeleton Loading (Tampil hanya jika data belum terload)
+    if (isLoading && transactions.length === 0 && categories.length === 0) {
+        return (
+            <div className="space-y-4 max-w-xl mx-auto pb-16">
+                {/* Top Header Skeleton */}
+                <div className="flex items-center justify-between gap-3 pt-1">
+                    <div className="h-6 w-28 skeleton-shimmer rounded-lg"></div>
+                    <div className="h-9 w-20 skeleton-shimmer rounded-xl"></div>
+                </div>
+
+                {/* Hero Balance Card Skeleton */}
+                <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+                    <div className="flex justify-between items-center">
+                        <div className="h-3 w-20 skeleton-shimmer rounded"></div>
+                        <div className="h-7 w-16 skeleton-shimmer rounded-xl"></div>
+                    </div>
+                    <div className="h-9 w-48 skeleton-shimmer rounded-lg"></div>
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                        <div className="h-3 w-24 skeleton-shimmer rounded"></div>
+                        <div className="h-5 w-20 skeleton-shimmer rounded-full"></div>
+                    </div>
+                </div>
+
+                {/* 2 Summary Cards Skeleton */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
+                        <div className="h-3 w-16 skeleton-shimmer rounded"></div>
+                        <div className="h-6 w-24 skeleton-shimmer rounded"></div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
+                        <div className="h-3 w-16 skeleton-shimmer rounded"></div>
+                        <div className="h-6 w-24 skeleton-shimmer rounded"></div>
+                    </div>
+                </div>
+
+                {/* Quick Action Buttons Skeleton */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 skeleton-shimmer"></div>
+                    <div className="h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 skeleton-shimmer"></div>
+                    <div className="h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 skeleton-shimmer"></div>
+                    <div className="h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 skeleton-shimmer"></div>
+                </div>
+
+                {/* Categories Card Skeleton */}
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-3">
+                    <div className="h-4 w-28 skeleton-shimmer rounded"></div>
+                    <div className="space-y-2 pt-2">
+                        <div className="h-8 w-full skeleton-shimmer rounded-xl"></div>
+                        <div className="h-8 w-full skeleton-shimmer rounded-xl"></div>
+                        <div className="h-8 w-full skeleton-shimmer rounded-xl"></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4 max-w-xl mx-auto pb-16">
-            {/* Top Bar Header — Clean & Streamlined */}
+            {/* Top Bar Header — Clean & Streamlined Apple Style */}
             <div className="flex items-center justify-between gap-3 pt-1">
                 <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                        Halo, {user?.email?.split('@')[0] || 'Keluarga'}! 👋
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                        Overview
                     </h2>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-black text-black bg-indigo-400 px-2.5 py-0.5 rounded-md border border-black dark:border-white">
-                            <Icon name="calendar" size={12} />
-                            {periodLabel}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => onNavigate(window.VIEWS.TRANSACTIONS)}
-                            className="text-[10px] sm:text-[11px] font-black text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5"
-                        >
-                            Semua Transaksi →
-                        </button>
-                    </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -346,259 +449,85 @@ window.DashboardView = React.memo(({
                         type="button"
                         onClick={onRefresh}
                         disabled={isRefreshing}
-                        className={`p-2 sm:px-3 sm:py-2 rounded-xl bg-card dark:bg-[#18181b] hover:bg-muted/80 text-foreground border-2 border-black dark:border-white ${NB.shadow.sm} text-xs font-black transition-all active:scale-95 cursor-pointer disabled:pointer-events-none ${isRefreshing ? 'opacity-70' : ''}`}
-                        title="Sinkronisasi Data"
+                        className={`p-2 sm:px-3 sm:py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-800 shadow-xs text-xs font-medium transition-all active:scale-95 cursor-pointer disabled:pointer-events-none ${isRefreshing ? 'opacity-70' : ''}`}
+                        title="Sync Data"
                     >
                         <div className="flex items-center gap-1.5">
-                            <Icon name="refresh" size={14} className={isRefreshing ? 'animate-spin text-indigo-500' : ''} />
-                            <span className="text-xs font-black hidden sm:inline">{isRefreshing ? 'Sync...' : 'Refresh'}</span>
+                            <Icon name="refresh" size={14} className={isRefreshing ? 'animate-spin text-blue-500' : ''} />
+                            <span className="text-xs font-medium hidden sm:inline">{isRefreshing ? 'Syncing...' : 'Sync'}</span>
                         </div>
                     </button>
                 </div>
             </div>
 
-            {/* Total Saldo Card (Hero) */}
-            <Card className="p-4 sm:p-5 bg-indigo-500 text-black border-2 border-black dark:border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]">
+            {/* Total Balance Card (Apple Hero Card) */}
+            <Card className="p-5 sm:p-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0 shadow-lg shadow-blue-500/20 rounded-3xl">
                 <div className="flex justify-between items-start">
                     <div>
-                        <p className="text-xs font-black uppercase tracking-wider text-black/80">Total Saldo Kas</p>
-                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-blue-100">Total Balance</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1 text-white">
                             Rp {metrics.totalBalance.toLocaleString('id-ID')}
                         </h1>
                     </div>
                     <button
                         type="button"
                         onClick={onAddClick}
-                        className="px-3 py-2 rounded-xl bg-white text-black font-black text-xs border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-[1px] hover:-translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-medium text-xs backdrop-blur-md border border-white/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                         <Icon name="plus" size={14} />
-                        <span>Transaksi</span>
+                        <span>Add</span>
                     </button>
                 </div>
 
-                <div className="mt-4 pt-3 border-t-2 border-black/20 flex items-center justify-between text-xs font-black">
-                    <span className="text-black/80">Pengeluaran Hari Ini:</span>
-                    <span className="bg-black/10 px-2 py-0.5 rounded-md border border-black/30">
+                <div className="mt-5 pt-3.5 border-t border-white/15 flex items-center justify-between text-xs">
+                    <span className="text-blue-100 font-normal">Today's Expense</span>
+                    <span className="bg-white/15 px-2.5 py-0.5 rounded-full font-medium text-white border border-white/10">
                         Rp {metrics.todayExpense.toLocaleString('id-ID')}
                     </span>
                 </div>
             </Card>
 
             {/* Income & Expense Summary Cards */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                <Card className="p-3.5 bg-emerald-300 dark:bg-emerald-950/40 text-foreground border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
-                    <div className="flex items-center gap-1.5 text-black dark:text-emerald-300 font-black text-xs uppercase tracking-wider">
-                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center border border-black">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <Card className="p-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs rounded-2xl">
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] uppercase tracking-wider">
+                        <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200/40 dark:border-emerald-800/40">
                             <Icon name="arrowDownLeft" size={12} />
                         </div>
-                        <span>Pemasukan</span>
+                        <span>Income</span>
                     </div>
-                    <p className="text-base sm:text-lg font-black text-black dark:text-emerald-200 mt-2 truncate">
+                    <p className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-2 truncate">
                         Rp {metrics.periodIncome.toLocaleString('id-ID')}
                     </p>
-                    <p className="text-[10px] font-bold text-black/70 dark:text-emerald-400 mt-0.5 line-clamp-1">{periodLabel}</p>
                 </Card>
 
-                <Card className="p-3.5 bg-rose-300 dark:bg-rose-950/40 text-foreground border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
-                    <div className="flex items-center gap-1.5 text-black dark:text-rose-300 font-black text-xs uppercase tracking-wider">
-                        <div className="w-5 h-5 rounded-full bg-rose-500 text-black flex items-center justify-center border border-black">
+                <Card className="p-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs rounded-2xl">
+                    <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-semibold text-[11px] uppercase tracking-wider">
+                        <div className="w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-200/40 dark:border-rose-800/40">
                             <Icon name="arrowUpRight" size={12} />
                         </div>
-                        <span>Pengeluaran</span>
+                        <span>Expense</span>
                     </div>
-                    <p className="text-base sm:text-lg font-black text-black dark:text-rose-200 mt-2 truncate">
+                    <p className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-2 truncate">
                         Rp {metrics.periodExpense.toLocaleString('id-ID')}
                     </p>
-                    <p className="text-[10px] font-bold text-black/70 dark:text-rose-400 mt-0.5 line-clamp-1">{periodLabel}</p>
                 </Card>
             </div>
 
-            {/* CARD 1: Catatan & Jadwal Perawatan Keluarga */}
-            <Card className="border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                            <Icon name="wrench" size={14} className="text-indigo-500" />
-                            <span>Catatan & Servis Keluarga</span>
-                        </CardTitle>
-                        <button
-                            type="button"
-                            onClick={() => setIsAddNoteOpen(true)}
-                            className="px-2 py-1 rounded-md bg-indigo-500 text-black font-black text-[11px] border border-black dark:border-white hover:bg-indigo-400 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                            <Icon name="plus" size={12} />
-                            <span>Tambah</span>
-                        </button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-2.5">
-                    {upcomingNotes.length === 0 ? (
-                        <div className="text-center py-5 bg-muted/20 rounded-xl border border-dashed border-border">
-                            <p className="text-xs font-bold text-muted-foreground">Belum ada catatan servis / keluarga.</p>
-                            <button
-                                type="button"
-                                onClick={() => setIsAddNoteOpen(true)}
-                                className="mt-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
-                            >
-                                + Catat Jadwal Servis Pertama
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {upcomingNotes.map(item => {
-                                const daysDiff = item.next_due_date 
-                                    ? Math.ceil((new Date(item.next_due_date) - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
-                                    : null;
-
-                                return (
-                                    <div 
-                                        key={item.id}
-                                        className="p-2.5 bg-muted/30 hover:bg-muted/50 rounded-xl border-2 border-black dark:border-zinc-800 flex items-center justify-between gap-2 transition-all"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-300 text-black border border-black">
-                                                    {item.category}
-                                                </span>
-                                                <h4 className="text-xs font-black text-foreground truncate">{item.title}</h4>
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">
-                                                Terakhir: {new Date(item.last_date).toLocaleDateString('id-ID')}
-                                                {item.cost ? ` • Rp ${parseFloat(item.cost).toLocaleString('id-ID')}` : ''}
-                                            </p>
-                                        </div>
-
-                                        <div className="text-right shrink-0">
-                                            {daysDiff !== null ? (
-                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border border-black ${
-                                                    daysDiff < 0 
-                                                        ? 'bg-rose-400 text-black animate-pulse'
-                                                        : daysDiff <= 7
-                                                            ? 'bg-amber-400 text-black'
-                                                            : 'bg-emerald-300 text-black'
-                                                }`}>
-                                                    {daysDiff < 0 ? `Lewat ${Math.abs(daysDiff)}h` : daysDiff === 0 ? 'Hari ini' : `${daysDiff}h lagi`}
-                                                </span>
-                                            ) : (
-                                                <span className="text-[10px] font-bold text-muted-foreground">Selesai</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    <div className="pt-1 text-center">
-                        <button
-                            type="button"
-                            onClick={() => onNavigate(window.VIEWS.FAMILY_NOTES)}
-                            className="text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
-                        >
-                            Buka Semua Catatan & Kelola Logbook ({notesList.length}) →
-                        </button>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* CARD 2: Rencana Anggaran & Planning (Dengan Tombol Realisasi) */}
-            <Card className="border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                            <Icon name="target" size={14} className="text-emerald-500" />
-                            <span>Rencana & Planning Transaksi</span>
-                        </CardTitle>
-                        <button
-                            type="button"
-                            onClick={() => setIsAddPlanOpen(true)}
-                            className="px-2 py-1 rounded-md bg-emerald-400 text-black font-black text-[11px] border border-black dark:border-white hover:bg-emerald-300 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                            <Icon name="plus" size={12} />
-                            <span>Rencana</span>
-                        </button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-2.5">
-                    {pendingPlans.length === 0 ? (
-                        <div className="text-center py-5 bg-muted/20 rounded-xl border border-dashed border-border">
-                            <p className="text-xs font-bold text-muted-foreground">Semua rencana transaksi telah terealisasi! 🎉</p>
-                            <button
-                                type="button"
-                                onClick={() => setIsAddPlanOpen(true)}
-                                className="mt-1.5 text-xs font-black text-emerald-600 dark:text-emerald-400 hover:underline"
-                            >
-                                + Buat Rencana Pengeluaran / Pemasukan
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {pendingPlans.map(plan => {
-                                const isExpense = plan.type === 'expense';
-                                return (
-                                    <div
-                                        key={plan.id}
-                                        className="p-3 bg-muted/30 hover:bg-muted/50 rounded-xl border-2 border-black dark:border-zinc-800 flex items-center justify-between gap-3 transition-all"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border border-black ${
-                                                    isExpense ? 'bg-rose-300 text-black' : 'bg-emerald-300 text-black'
-                                                }`}>
-                                                    {isExpense ? 'Pengeluaran' : 'Pemasukan'}
-                                                </span>
-                                                <h4 className="text-xs font-black text-foreground truncate">{plan.title}</h4>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <p className="text-xs font-black text-foreground">
-                                                    Rp {parseFloat(plan.amount).toLocaleString('id-ID')}
-                                                </p>
-                                                <span className="text-[10px] text-muted-foreground">
-                                                    • Target: {new Date(plan.target_date).toLocaleDateString('id-ID')}
-                                                </span>
-                                            </div>
-                                            {plan.notes && (
-                                                <p className="text-[10px] text-muted-foreground italic mt-0.5 line-clamp-1">
-                                                    "{plan.notes}"
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {/* Tombol Realisasi */}
-                                        <button
-                                            type="button"
-                                            onClick={() => openRealizeModal(plan)}
-                                            className="px-2.5 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-black font-black text-xs border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] transition-all flex items-center gap-1 shrink-0 cursor-pointer"
-                                            title="Realisasikan ke Transaksi"
-                                        >
-                                            <Icon name="zap" size={12} />
-                                            <span>Realisasi</span>
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
             {/* Category Breakdown Chart Card */}
-            <Card className="border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]">
+            <Card className="border border-slate-200/80 dark:border-slate-800 shadow-xs rounded-2xl">
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                             <Icon name="pieChart" size={14} />
-                            <span>Kategori Pengeluaran ({sortedCategories.length})</span>
+                            <span>Categories</span>
                         </CardTitle>
-                        <span className="text-[10px] font-black text-muted-foreground">
-                            Urutan: {dashboardSettings?.sort === 'lowest' ? 'Terkecil' : dashboardSettings?.sort === 'name' ? 'A-Z' : 'Terbesar (Default)'}
-                        </span>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {sortedCategories.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground text-xs font-bold">
-                            Tidak ada data pengeluaran pada periode ini.
+                        <div className="text-center py-8 text-muted-foreground text-xs font-medium">
+                            No expenses in this period.
                         </div>
                     ) : (
                         <>
@@ -608,7 +537,7 @@ window.DashboardView = React.memo(({
                             </div>
 
                             {/* Sorted Category Bars */}
-                            <div className="space-y-2 pt-2 border-t border-border">
+                            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                                 {sortedCategories.map(cat => {
                                     const percentage = metrics.periodExpense > 0 
                                         ? Math.round((cat.amount / metrics.periodExpense) * 100) 
@@ -616,16 +545,16 @@ window.DashboardView = React.memo(({
 
                                     return (
                                         <div key={cat.name} className="space-y-1">
-                                            <div className="flex items-center justify-between text-xs font-bold">
-                                                <span className="flex items-center gap-1.5">
-                                                    <span className="w-2.5 h-2.5 rounded-full border border-black" style={{ backgroundColor: cat.color }}></span>
+                                            <div className="flex items-center justify-between text-xs font-medium">
+                                                <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
                                                     <span>{cat.name}</span>
                                                 </span>
-                                                <span className="font-mono font-black">
+                                                <span className="font-mono font-medium text-slate-900 dark:text-slate-100">
                                                     Rp {cat.amount.toLocaleString('id-ID')} ({percentage}%)
                                                 </span>
                                             </div>
-                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-black/30">
+                                            <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                                 <div 
                                                     className="h-full rounded-full transition-all duration-500" 
                                                     style={{ width: `${percentage}%`, backgroundColor: cat.color }}
@@ -640,19 +569,95 @@ window.DashboardView = React.memo(({
                 </CardContent>
             </Card>
 
+            {/* Monthly Pareto (Income vs Expense Bar Comparison) */}
+            <Card className="border border-slate-200/80 dark:border-slate-800 shadow-xs rounded-2xl">
+                <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Icon name="barChart" size={14} />
+                            <span>Monthly Comparison (Pareto)</span>
+                        </CardTitle>
+                        <div className="flex items-center gap-3 text-[10px] font-semibold">
+                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Income
+                            </span>
+                            <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                <span className="w-2 h-2 rounded-full bg-rose-500"></span> Expense
+                            </span>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {monthlyPareto.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground text-xs font-medium">
+                            Belum ada data bulanan.
+                        </div>
+                    ) : (
+                        <div className="space-y-3 pt-1">
+                            {monthlyPareto.map(item => {
+                                const maxVal = Math.max(...monthlyPareto.flatMap(m => [m.income, m.expense]), 1);
+                                const incomeWidth = Math.round((item.income / maxVal) * 100);
+                                const expenseWidth = Math.round((item.expense / maxVal) * 100);
+
+                                return (
+                                    <div key={item.key} className="space-y-1 bg-slate-50/50 dark:bg-slate-800/30 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60">
+                                        <div className="flex justify-between items-center text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1">
+                                            <span>{item.label}</span>
+                                            <span className="text-[11px] font-mono text-slate-500">
+                                                Net: <span className={item.income - item.expense >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                                                    Rp {(item.income - item.expense).toLocaleString('id-ID')}
+                                                </span>
+                                            </span>
+                                        </div>
+
+                                        {/* Income Bar */}
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className="w-12 text-slate-500 font-medium truncate">Income</span>
+                                            <div className="flex-1 h-2 bg-slate-200/60 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${Math.max(incomeWidth, 2)}%` }}
+                                                />
+                                            </div>
+                                            <span className="w-20 text-right font-mono font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                Rp {item.income.toLocaleString('id-ID')}
+                                            </span>
+                                        </div>
+
+                                        {/* Expense Bar */}
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className="w-12 text-slate-500 font-medium truncate">Expense</span>
+                                            <div className="flex-1 h-2 bg-slate-200/60 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-rose-500 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${Math.max(expenseWidth, 2)}%` }}
+                                                />
+                                            </div>
+                                            <span className="w-20 text-right font-mono font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                Rp {item.expense.toLocaleString('id-ID')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* MODAL 1: Quick Add Family Note */}
             {isAddNoteOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
-                    <div className="bg-card dark:bg-[#18181b] border-2 border-black dark:border-white rounded-2xl p-5 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                        <div className="flex items-center justify-between border-b-2 border-border pb-2">
-                            <h3 className="font-black text-sm text-foreground flex items-center gap-1.5">
-                                <Icon name="wrench" size={16} className="text-indigo-500" />
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <h3 className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <Icon name="wrench" size={16} className="text-blue-500" />
                                 Catat Jadwal / Servis Keluarga
                             </h3>
                             <button
                                 type="button"
                                 onClick={() => setIsAddNoteOpen(false)}
-                                className="p-1 text-muted-foreground hover:text-foreground font-black"
+                                className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                             >
                                 <Icon name="x" size={18} />
                             </button>
@@ -660,10 +665,10 @@ window.DashboardView = React.memo(({
 
                         <form onSubmit={handleQuickAddNote} className="space-y-3">
                             <div>
-                                <Label className="text-xs font-black">Judul Catatan / Servis *</Label>
+                                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Title *</Label>
                                 <Input
                                     type="text"
-                                    placeholder="Cth: Ganti Oli Vario, Servis AC, Pajak STNK"
+                                    placeholder="e.g. Oil Change, AC Service, Vehicle Tax"
                                     value={noteForm.title}
                                     onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
                                     required
@@ -672,21 +677,21 @@ window.DashboardView = React.memo(({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <Label className="text-xs font-black">Kategori</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Category</Label>
                                     <select
                                         value={noteForm.category}
                                         onChange={(e) => setNoteForm({ ...noteForm, category: e.target.value })}
-                                        className="flex h-11 w-full rounded-lg border-2 border-black dark:border-white bg-white text-black font-black px-2 text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none"
+                                        className="flex h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-medium px-3 text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     >
-                                        <option value="Kendaraan">🛵 Kendaraan</option>
-                                        <option value="Rumah & Properti">🏠 Rumah & Properti</option>
-                                        <option value="Kesehatan">🏥 Kesehatan</option>
-                                        <option value="Dokumen & Legal">📄 Dokumen & Legal</option>
-                                        <option value="Lainnya">📝 Lainnya</option>
+                                        <option value="Kendaraan">Vehicle</option>
+                                        <option value="Rumah & Properti">Home & Property</option>
+                                        <option value="Kesehatan">Health</option>
+                                        <option value="Dokumen & Legal">Legal & Documents</option>
+                                        <option value="Lainnya">Other</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-black">Biaya (Rp)</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Cost</Label>
                                     <Input
                                         type="number"
                                         placeholder="0"
@@ -698,7 +703,7 @@ window.DashboardView = React.memo(({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <Label className="text-xs font-black">Tanggal Terakhir *</Label>
+                                    <Label className="text-xs font-black">Last Date *</Label>
                                     <Input
                                         type="date"
                                         value={noteForm.last_date}
@@ -707,7 +712,7 @@ window.DashboardView = React.memo(({
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-black">Jadwal Berikutnya</Label>
+                                    <Label className="text-xs font-black">Next Due Date</Label>
                                     <Input
                                         type="date"
                                         value={noteForm.next_due_date}
@@ -717,10 +722,10 @@ window.DashboardView = React.memo(({
                             </div>
 
                             <div>
-                                <Label className="text-xs font-black">Catatan Tambahan (Opsional)</Label>
+                                <Label className="text-xs font-black">Notes (Optional)</Label>
                                 <Input
                                     type="text"
-                                    placeholder="Cth: Oli SPX2, Bengkel AHASS, KM 18.000"
+                                    placeholder="e.g. SPX2 Oil, 18,000 km checkup"
                                     value={noteForm.notes}
                                     onChange={(e) => setNoteForm({ ...noteForm, notes: e.target.value })}
                                 />
@@ -733,14 +738,14 @@ window.DashboardView = React.memo(({
                                     onClick={() => setIsAddNoteOpen(false)}
                                     className="flex-1"
                                 >
-                                    Batal
+                                    Cancel
                                 </Button>
                                 <Button
                                     type="submit"
                                     variant="default"
-                                    className="flex-1 bg-indigo-500 hover:bg-indigo-400"
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                                 >
-                                    Simpan Catatan
+                                    Save Record
                                 </Button>
                             </div>
                         </form>
@@ -750,17 +755,17 @@ window.DashboardView = React.memo(({
 
             {/* MODAL 2: Quick Add Planning */}
             {isAddPlanOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
-                    <div className="bg-card dark:bg-[#18181b] border-2 border-black dark:border-white rounded-2xl p-5 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                        <div className="flex items-center justify-between border-b-2 border-border pb-2">
-                            <h3 className="font-black text-sm text-foreground flex items-center gap-1.5">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <h3 className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
                                 <Icon name="target" size={16} className="text-emerald-500" />
-                                Buat Rencana Transaksi (Planning)
+                                New Financial Plan
                             </h3>
                             <button
                                 type="button"
                                 onClick={() => setIsAddPlanOpen(false)}
-                                className="p-1 text-muted-foreground hover:text-foreground font-black"
+                                className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                             >
                                 <Icon name="x" size={18} />
                             </button>
@@ -768,10 +773,10 @@ window.DashboardView = React.memo(({
 
                         <form onSubmit={handleQuickAddPlan} className="space-y-3">
                             <div>
-                                <Label className="text-xs font-black">Nama Rencana *</Label>
+                                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Plan Title *</Label>
                                 <Input
                                     type="text"
-                                    placeholder="Cth: Beli Ban Motor, Bonus Freelance, Beli Sembako"
+                                    placeholder="e.g. Tires replacement, Freelance bonus, Groceries"
                                     value={planForm.title}
                                     onChange={(e) => setPlanForm({ ...planForm, title: e.target.value })}
                                     required
@@ -780,30 +785,30 @@ window.DashboardView = React.memo(({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <Label className="text-xs font-black">Tipe Transaksi</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Type</Label>
                                     <div className="grid grid-cols-2 gap-1 mt-1">
                                         <button
                                             type="button"
                                             onClick={() => setPlanForm({ ...planForm, type: 'expense' })}
-                                            className={`p-2 text-xs font-black rounded-lg border-2 border-black transition-all ${
-                                                planForm.type === 'expense' ? 'bg-rose-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-muted text-muted-foreground'
+                                            className={`p-2 text-xs font-medium rounded-xl transition-all ${
+                                                planForm.type === 'expense' ? 'bg-rose-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                                             }`}
                                         >
-                                            Pengeluaran
+                                            Expense
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setPlanForm({ ...planForm, type: 'income' })}
-                                            className={`p-2 text-xs font-black rounded-lg border-2 border-black transition-all ${
-                                                planForm.type === 'income' ? 'bg-emerald-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-muted text-muted-foreground'
+                                            className={`p-2 text-xs font-medium rounded-xl transition-all ${
+                                                planForm.type === 'income' ? 'bg-emerald-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                                             }`}
                                         >
-                                            Pemasukan
+                                            Income
                                         </button>
                                     </div>
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-black">Target Nominal (Rp) *</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Estimated Amount *</Label>
                                     <Input
                                         type="number"
                                         placeholder="0"
@@ -816,13 +821,13 @@ window.DashboardView = React.memo(({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <Label className="text-xs font-black">Kategori</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Category</Label>
                                     <select
                                         value={planForm.category_id}
                                         onChange={(e) => setPlanForm({ ...planForm, category_id: e.target.value })}
-                                        className="flex h-11 w-full rounded-lg border-2 border-black dark:border-white bg-white text-black font-black px-2 text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none"
+                                        className="flex h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-medium px-3 text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     >
-                                        <option value="">Pilih Kategori...</option>
+                                        <option value="">Select Category...</option>
                                         {categories
                                             .filter(c => c.type === planForm.type)
                                             .map(c => (
@@ -832,7 +837,7 @@ window.DashboardView = React.memo(({
                                     </select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-black">Target Tanggal</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Target Date</Label>
                                     <Input
                                         type="date"
                                         value={planForm.target_date}
@@ -843,10 +848,10 @@ window.DashboardView = React.memo(({
                             </div>
 
                             <div>
-                                <Label className="text-xs font-black">Keterangan / Catatan</Label>
+                                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Notes (Optional)</Label>
                                 <Input
                                     type="text"
-                                    placeholder="Cth: Beli di official store / tanggal gajian"
+                                    placeholder="e.g. Target store / payday week"
                                     value={planForm.notes}
                                     onChange={(e) => setPlanForm({ ...planForm, notes: e.target.value })}
                                 />
@@ -859,14 +864,14 @@ window.DashboardView = React.memo(({
                                     onClick={() => setIsAddPlanOpen(false)}
                                     className="flex-1"
                                 >
-                                    Batal
+                                    Cancel
                                 </Button>
                                 <Button
                                     type="submit"
                                     variant="default"
-                                    className="flex-1 bg-emerald-400 hover:bg-emerald-300 text-black font-black"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                                 >
-                                    Simpan Rencana
+                                    Save Plan
                                 </Button>
                             </div>
                         </form>
@@ -876,29 +881,29 @@ window.DashboardView = React.memo(({
 
             {/* MODAL 3: Realisasi Confirmation Modal */}
             {realizePlanTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
-                    <div className="bg-card dark:bg-[#18181b] border-2 border-black dark:border-white rounded-2xl p-5 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                        <div className="flex items-center justify-between border-b-2 border-border pb-2">
-                            <h3 className="font-black text-sm text-foreground flex items-center gap-1.5">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <h3 className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
                                 <Icon name="zap" size={16} className="text-amber-500" />
                                 Realisasikan ke Transaksi
                             </h3>
                             <button
                                 type="button"
                                 onClick={() => setRealizePlanTarget(null)}
-                                className="p-1 text-muted-foreground hover:text-foreground font-black"
+                                className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                             >
                                 <Icon name="x" size={18} />
                             </button>
                         </div>
 
-                        <div className="p-3 bg-amber-100 dark:bg-amber-950/40 border-2 border-black rounded-xl text-black dark:text-amber-200 text-xs font-bold leading-relaxed">
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/50 rounded-2xl text-amber-800 dark:text-amber-200 text-xs font-medium leading-relaxed">
                             💡 Data ini akan otomatis masuk ke database <strong>Transaksi ({realizePlanTarget.type === 'expense' ? 'Pengeluaran' : 'Pemasukan'})</strong> dan saldo kas akan langsung disesuaikan.
                         </div>
 
                         <form onSubmit={handleExecuteRealize} className="space-y-3">
                             <div>
-                                <Label className="text-xs font-black">Keterangan Transaksi</Label>
+                                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Keterangan Transaksi</Label>
                                 <Input
                                     type="text"
                                     value={realizeForm.description}
@@ -909,7 +914,7 @@ window.DashboardView = React.memo(({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <Label className="text-xs font-black">Nominal Aktual (Rp) *</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Nominal Aktual (Rp) *</Label>
                                     <Input
                                         type="number"
                                         value={realizeForm.amount}
@@ -918,7 +923,7 @@ window.DashboardView = React.memo(({
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-black">Tanggal Transaksi *</Label>
+                                    <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Tanggal Transaksi *</Label>
                                     <Input
                                         type="date"
                                         value={realizeForm.date}
@@ -929,12 +934,12 @@ window.DashboardView = React.memo(({
                             </div>
 
                             <div>
-                                <Label className="text-xs font-black">Kategori Transaksi *</Label>
+                                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">Kategori Transaksi *</Label>
                                 <select
                                     value={realizeForm.category_id}
                                     onChange={(e) => setRealizeForm({ ...realizeForm, category_id: e.target.value })}
                                     required
-                                    className="flex h-11 w-full rounded-lg border-2 border-black dark:border-white bg-white text-black font-black px-2 text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none"
+                                    className="flex h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-medium px-3 text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 >
                                     <option value="">-- Pilih Kategori --</option>
                                     {categories
@@ -958,7 +963,7 @@ window.DashboardView = React.memo(({
                                 <Button
                                     type="submit"
                                     variant="default"
-                                    className="flex-1 bg-emerald-400 hover:bg-emerald-300 text-black font-black"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                                 >
                                     ⚡ Eksekusi Realisasi
                                 </Button>

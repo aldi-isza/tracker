@@ -6,6 +6,22 @@
     <meta name="description" content="ISZA FAMILY - Modern Personal Finance Dashboard">
     <title>ISZA FAMILY</title>
     
+    <!-- Immediate Theme & Dark Mode Init (Prevents White Flash) -->
+    <script>
+        (function() {
+            try {
+                var u = localStorage.getItem('ff_user');
+                if (u && JSON.parse(u).theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.remove('light');
+                } else if (!u && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.remove('light');
+                }
+            } catch(e) {}
+        })();
+    </script>
+    
     <!-- PWA Manifest & Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#adff2f">
@@ -16,10 +32,8 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
     
-    <!-- Google Fonts: Plus Jakarta Sans -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <!-- Apple System Fonts (Native SF Pro / San Francisco) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,10 +50,6 @@
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- jsPDF & html2canvas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <!-- Tailwind Configuration -->
     <script>
@@ -48,15 +58,25 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        sans: [
+                            '-apple-system',
+                            'BlinkMacSystemFont',
+                            '"SF Pro Display"',
+                            '"SF Pro Text"',
+                            '"SF Pro"',
+                            '"Helvetica Neue"',
+                            'Helvetica',
+                            'Arial',
+                            'sans-serif'
+                        ],
                     },
                     colors: {
                         indigo: {
-                            50: '#f7ffe6',
-                            100: '#ebffc2',
-                            500: '#adff2f', // Hijau stabilo
-                            600: '#adff2f', // Hijau stabilo
-                            700: '#94e61c',
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb', // Apple System Blue
+                            700: '#1d4ed8',
                         },
                         success: { DEFAULT: "#10b981", foreground: "#ffffff" },
                         warning: { DEFAULT: "#f59e0b", foreground: "#ffffff" }
@@ -66,11 +86,46 @@
         }
     </script>
     
+    <!-- Immediate Netlify Badge Remover -->
+    <script>
+        (function() {
+            function removeBadge() {
+                var el = document.getElementById('nl-badge-frame') || document.querySelector('iframe[title*="Netlify"]');
+                if (el) el.remove();
+            }
+            removeBadge();
+            document.addEventListener('DOMContentLoaded', removeBadge);
+            window.addEventListener('load', removeBadge);
+            var obs = new MutationObserver(function() {
+                removeBadge();
+            });
+            obs.observe(document.documentElement, { childList: true, subtree: true });
+        })();
+    </script>
+
     <!-- Custom Stylesheet -->
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css?v=41">
+    <style>
+        /* Immediate Kill Netlify Badge */
+        #nl-badge-frame, iframe[id*="nl-badge"], iframe[title*="Netlify"], [data-nl-ready] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+    </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <!-- Clean Minimalist Initial Web Loading State (Zero Skeleton, Zero "IF" Logo) -->
+        <div class="min-h-screen bg-slate-50 dark:bg-[#090d16] flex flex-col items-center justify-center p-4 select-none">
+            <div class="relative flex items-center justify-center">
+                <div class="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-800 border-t-blue-600 dark:border-t-blue-500 animate-spin"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- ========================================== -->
     <!-- Modular Script Loading (ORDER MATTERS!)    -->
@@ -83,37 +138,38 @@
     <!-- ========================================== -->
 
     <!-- Layer 1: Utilities -->
-    <script type="text/babel" src="./utils/formatters.js?v=13"></script>
-    <script type="text/babel" src="./utils/validators.js?v=13"></script>
-    <script type="text/babel" src="./utils/finance.js?v=13"></script>
-    <script type="text/babel" src="./utils/styles.js?v=13"></script>
-
+    <script type="text/babel" src="./utils/formatters.js?v=47"></script>
+    <script type="text/babel" src="./utils/validators.js?v=47"></script>
+    <script type="text/babel" src="./utils/finance.js?v=47"></script>
+    <script type="text/babel" src="./utils/styles.js?v=47"></script>
+    <script type="text/babel" src="./utils/gemini.js?v=47"></script>
     <!-- Layer 2: UI Primitives -->
-    <script type="text/babel" src="./components/ui.js?v=14"></script>
+    <script type="text/babel" src="./components/ui.js?v=47"></script>
 
     <!-- Layer 3: Custom Hooks -->
-    <script type="text/babel" src="./hooks/useClickOutside.js?v=14"></script>
-    <script type="text/babel" src="./hooks/useSessionManager.js?v=14"></script>
-    <script type="text/babel" src="./hooks/useFinanceData.js?v=14"></script>
-    <script type="text/babel" src="./hooks/useFamilyNotes.js?v=14"></script>
-    <script type="text/babel" src="./hooks/usePlanning.js?v=14"></script>
+    <script type="text/babel" src="./hooks/useClickOutside.js?v=47"></script>
+    <script type="text/babel" src="./hooks/useSessionManager.js?v=47"></script>
+    <script type="text/babel" src="./hooks/useFinanceData.js?v=47"></script>
+    <script type="text/babel" src="./hooks/useFamilyNotes.js?v=47"></script>
+    <script type="text/babel" src="./hooks/usePlanning.js?v=47"></script>
 
     <!-- Layer 4: Shared Components -->
-    <script type="text/babel" src="./components/FilterDropdown.js?v=14"></script>
-    <script type="text/babel" src="./components/TransactionItem.js?v=14"></script>
+    <script type="text/babel" src="./components/FilterDropdown.js?v=47"></script>
+    <script type="text/babel" src="./components/TransactionItem.js?v=47"></script>
+    <script type="text/babel" src="./components/AiAdvisorModal.js?v=47"></script>
 
     <!-- Layer 5: View Components -->
-    <script type="text/babel" src="./views/LoginPage.js?v=14"></script>
-    <script type="text/babel" src="./views/DashboardView.js?v=14"></script>
-    <script type="text/babel" src="./views/TransactionsView.js?v=14"></script>
-    <script type="text/babel" src="./views/FamilyNotesView.js?v=14"></script>
-    <script type="text/babel" src="./views/CategoriesView.js?v=14"></script>
-    <script type="text/babel" src="./views/SettingsView.js?v=14"></script>
+    <script type="text/babel" src="./views/LoginPage.js?v=47"></script>
+    <script type="text/babel" src="./views/DashboardView.js?v=47"></script>
+    <script type="text/babel" src="./views/TransactionsView.js?v=47"></script>
+    <script type="text/babel" src="./views/FamilyNotesView.js?v=47"></script>
+    <script type="text/babel" src="./views/CategoriesView.js?v=47"></script>
+    <script type="text/babel" src="./views/SettingsView.js?v=47"></script>
 
     <!-- Config (Loaded before app.js) -->
-    <script src="./config.js?v=14"></script>
+    <script src="./config.js?v=47"></script>
     
     <!-- Layer 6: Core App (must be last) -->
-    <script type="text/babel" src="./app.js?v=14"></script>
+    <script type="text/babel" src="./app.js?v=47"></script>
 </body>
 </html>

@@ -21,6 +21,13 @@ window.useFinanceData = (user, api, toast) => {
     const [categories, setCategories] = _fdUseState(() => {
         try { return JSON.parse(localStorage.getItem('isza_tracker_cats_cache')) || []; } catch(e) { return []; }
     });
+    const [isLoading, setIsLoading] = _fdUseState(() => {
+        try {
+            const hasTxs = localStorage.getItem('isza_tracker_txs_cache');
+            const hasCats = localStorage.getItem('isza_tracker_cats_cache');
+            return !(hasTxs && hasCats);
+        } catch(e) { return true; }
+    });
     const [isRefreshing, setIsRefreshing] = _fdUseState(false);
 
     // 2. Fungsi Load Data Utama (Fetch dari Supabase -> Update UI -> Save ke Cache)
@@ -47,6 +54,7 @@ window.useFinanceData = (user, api, toast) => {
         } catch (error) {
             console.error('[loadData Error]', error);
         } finally {
+            setIsLoading(false);
             if (!silent) setIsRefreshing(false);
         }
     }, [user, api]);
@@ -60,6 +68,7 @@ window.useFinanceData = (user, api, toast) => {
         } catch (e) {
             toast('Gagal menyinkronkan data', 'error');
         } finally {
+            setIsLoading(false);
             setIsRefreshing(false);
         }
     }, [isRefreshing, user, loadData, toast]);
@@ -73,10 +82,11 @@ window.useFinanceData = (user, api, toast) => {
             // Clear cache jika user logout
             setTransactions([]);
             setCategories([]);
+            setIsLoading(true);
             localStorage.removeItem('isza_tracker_txs_cache');
             localStorage.removeItem('isza_tracker_cats_cache');
         }
     }, [user, loadData]);
 
-    return { transactions, categories, isRefreshing, loadData, handleManualRefresh };
+    return { transactions, categories, isLoading, isRefreshing, loadData, handleManualRefresh };
 };
